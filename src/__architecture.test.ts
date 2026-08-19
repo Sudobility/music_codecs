@@ -21,9 +21,16 @@ const FORBIDDEN = [
 ];
 
 function sourceFiles(): string[] {
-  return globSync('src/**/*.ts', { cwd: process.cwd() })
-    .filter(f => !f.includes('.test.'))
-    .map(f => join(process.cwd(), f));
+  return (
+    globSync('src/**/*.ts', { cwd: process.cwd() })
+      .filter(f => !f.includes('.test.'))
+      // `src/test/` is scaffolding, not shipped: `package.json`'s `files` and the
+      // build both leave it out. It is where the real MIDI codec lives for tests
+      // to round-trip through — the one place `@tonejs/midi` is legitimate here,
+      // and the reason this package no longer borrows one from `music_io`.
+      .filter(f => !f.startsWith('test/') && !f.includes('/test/'))
+      .map(f => join(process.cwd(), f))
+  );
 }
 
 describe('package boundaries', () => {
@@ -32,7 +39,10 @@ describe('package boundaries', () => {
     for (const file of sourceFiles()) {
       const text = readFileSync(file, 'utf8');
       for (const banned of FORBIDDEN) {
-        if (text.includes(`from '${banned}`) || text.includes(`from "${banned}`)) {
+        if (
+          text.includes(`from '${banned}`) ||
+          text.includes(`from "${banned}`)
+        ) {
           offenders.push(`${file}: ${banned}`);
         }
       }
@@ -41,8 +51,12 @@ describe('package boundaries', () => {
   });
 
   it('depends on music_types and nothing else at runtime', () => {
-    const pkg = JSON.parse(readFileSync(join(process.cwd(), 'package.json'), 'utf8'));
+    const pkg = JSON.parse(
+      readFileSync(join(process.cwd(), 'package.json'), 'utf8')
+    );
     expect(Object.keys(pkg.dependencies ?? {})).toEqual([]);
-    expect(Object.keys(pkg.peerDependencies ?? {})).toEqual(['@sudobility/music_types']);
+    expect(Object.keys(pkg.peerDependencies ?? {})).toEqual([
+      '@sudobility/music_types',
+    ]);
   });
 });
