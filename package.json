@@ -1,6 +1,6 @@
 {
   "name": "@sudobility/music_codecs",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Score encoders and decoders for ScoreSmith - MIDI, MusicXML and tracker modules. Shared by frontend and backend; no UI, no audio, no platform.",
   "type": "module",
   "main": "./dist/index.js",
@@ -40,11 +40,11 @@
   "author": "Sudobility",
   "license": "BUSL-1.1",
   "peerDependencies": {
-    "@sudobility/music_types": "^0.11.22"
+    "@sudobility/music_types": "^0.11.23"
   },
   "devDependencies": {
     "@eslint/js": "^9.38.0",
-    "@sudobility/music_types": "^0.11.22",
+    "@sudobility/music_types": "^0.11.23",
     "@sudobility/types": "^1.9.66",
     "@tonejs/midi": "^2.0.28",
     "@types/jsdom": "^30.0.0",
