@@ -342,7 +342,8 @@ function trimSamePitchOverlaps(notes: NoteEvent[]): {
       const next = sorted[nextIndex];
       if (!next) continue;
 
-      const current = byId.get(sorted[i].id)!;
+      const current = byId.get(sorted[i].id);
+      if (!current) continue;
       const currentEnd = current.startTick + current.durationTicks;
       if (currentEnd > next.startTick) {
         const durationTicks = Math.max(1, next.startTick - current.startTick);
@@ -354,7 +355,7 @@ function trimSamePitchOverlaps(notes: NoteEvent[]): {
     }
   }
 
-  return { notes: notes.map(note => byId.get(note.id)!), trimmedCount };
+  return { notes: notes.map(note => byId.get(note.id) ?? note), trimmedCount };
 }
 
 function prepareSelectionNotes(
@@ -595,6 +596,8 @@ export function importMidiFile(
   );
 
   const now = new Date().toISOString();
+  // Trimmed once, here, rather than in both halves of the ternary below.
+  const headerTitle = midi.header.name?.trim() ?? '';
   const score: Score = {
     id: createId(),
     version: 1,
@@ -602,10 +605,7 @@ export function importMidiFile(
     metadata: {
       // The neutral model makes `name` optional, since not every Standard MIDI
       // File carries one; @tonejs/midi papered over that with an empty string.
-      title:
-        (midi.header.name ?? '').trim().length > 0
-          ? midi.header.name!.trim()
-          : 'Imported MIDI',
+      title: headerTitle.length > 0 ? headerTitle : 'Imported MIDI',
       createdAt: now,
       updatedAt: now,
     },
