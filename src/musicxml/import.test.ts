@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { TEST_MUSICXML_WARNINGS } from '../test/musicxml-warnings.js';
 import { importMusicXml } from './import.js';
 import { isNoteEvent, isRestEvent } from '@sudobility/music_types';
+import type { NoteEvent } from '@sudobility/music_types';
 import { pitchToMidi } from '@sudobility/music_types';
 import { ticksFor } from '@sudobility/music_types';
 
@@ -257,7 +258,7 @@ describe('importMusicXml: tempo', () => {
 });
 
 describe('importMusicXml: unsupported/decorative elements never throw, and are reported', () => {
-  it('warns once about lyrics and continues importing', () => {
+  it('imports lyrics rather than dropping them with a warning', () => {
     const xml = MINIMAL_HEADER(`<measure number="1">
 <attributes><divisions>480</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes>
 <note><pitch><step>C</step><octave>4</octave></pitch><duration>480</duration><voice>1</voice><type>quarter</type><lyric><text>la</text></lyric></note>
@@ -268,15 +269,37 @@ describe('importMusicXml: unsupported/decorative elements never throw, and are r
       parser,
       TEST_MUSICXML_WARNINGS
     );
-    expect(score.tracks[0].measures[0].voices[0].events).toHaveLength(2);
-    const lyricWarnings = warnings.filter(w => /lyric/i.test(w));
-    expect(lyricWarnings).toHaveLength(1); // deduplicated
+    const events = score.tracks[0].measures[0].voices[0].events;
+    expect(events).toHaveLength(2);
+    // They used to be dropped, and warned about once (deduplicated).
+    expect(warnings.filter(w => /lyric/i.test(w))).toHaveLength(0);
+    expect(events.filter(isNoteEvent).map(e => e.lyric?.text)).toEqual([
+      'la',
+      'la',
+    ]);
   });
 
-  it('skips grace notes with a warning, without disrupting subsequent note timing', () => {
+  it('reads how a syllable joins the next, which is what draws the hyphen', () => {
     const xml = MINIMAL_HEADER(`<measure number="1">
 <attributes><divisions>480</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes>
-<note><grace/><pitch><step>B</step><octave>4</octave></pitch><voice>1</voice><type>eighth</type></note>
+<note><pitch><step>C</step><octave>4</octave></pitch><duration>480</duration><voice>1</voice><type>quarter</type><lyric><syllabic>begin</syllabic><text>beau</text></lyric></note>
+<note><pitch><step>D</step><octave>4</octave></pitch><duration>480</duration><voice>1</voice><type>quarter</type><lyric><syllabic>end</syllabic><text>ty</text></lyric></note>
+<note><pitch><step>E</step><octave>4</octave></pitch><duration>960</duration><voice>1</voice><type>half</type><lyric><syllabic>single</syllabic><text>now</text></lyric></note>
+</measure>`);
+    const { score } = importMusicXml(xml, parser, TEST_MUSICXML_WARNINGS);
+    const notes =
+      score.tracks[0].measures[0].voices[0].events.filter(isNoteEvent);
+
+    expect(notes[0].lyric).toEqual({ text: 'beau', syllabic: 'begin' });
+    expect(notes[1].lyric).toEqual({ text: 'ty', syllabic: 'end' });
+    // `single` is the model's default, so it is not stored.
+    expect(notes[2].lyric).toEqual({ text: 'now' });
+  });
+
+  it('attaches a grace note to the note it decorates, taking no time from the bar', () => {
+    const xml = MINIMAL_HEADER(`<measure number="1">
+<attributes><divisions>480</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes>
+<note><grace slash="yes"/><pitch><step>B</step><octave>4</octave></pitch><voice>1</voice><type>eighth</type></note>
 <note><pitch><step>C</step><octave>4</octave></pitch><duration>1920</duration><voice>1</voice><type>whole</type></note>
 </measure>`);
     const { score, warnings } = importMusicXml(
@@ -285,9 +308,16 @@ describe('importMusicXml: unsupported/decorative elements never throw, and are r
       TEST_MUSICXML_WARNINGS
     );
     const events = score.tracks[0].measures[0].voices[0].events;
+
+    // One event, not two: the ornament hangs off its principal.
     expect(events).toHaveLength(1);
-    expect(isNoteEvent(events[0]) && events[0].startTick).toBe(0);
-    expect(warnings.some(w => /grace/i.test(w))).toBe(true);
+    expect(events[0].durationTicks).toBe(1920);
+    expect(warnings.some(w => /grace/i.test(w))).toBe(false);
+
+    const principal = events[0] as NoteEvent;
+    expect(principal.graceNotes).toHaveLength(1);
+    expect(principal.graceNotes?.[0].pitch.step).toBe('B');
+    expect(principal.graceNotes?.[0].slashed).toBe(true);
   });
 
   it('skips an unpitched note but still advances the cursor by its duration, so later notes keep their correct position', () => {
@@ -312,7 +342,7 @@ describe('importMusicXml: unsupported/decorative elements never throw, and are r
     expect(warnings.some(w => /unpitched/i.test(w))).toBe(true);
   });
 
-  it('warns about ornaments and unsupported time-modification (tuplets) without throwing', () => {
+  it('imports an ornament and a tuplet, warning about neither', () => {
     const xml = MINIMAL_HEADER(`<measure number="1">
 <attributes><divisions>480</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes>
 <note><pitch><step>C</step><octave>4</octave></pitch><duration>320</duration><voice>1</voice><type>eighth</type><time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification><notations><ornaments><turn/></ornaments></notations></note>
@@ -326,8 +356,27 @@ describe('importMusicXml: unsupported/decorative elements never throw, and are r
     expect(score.tracks[0].measures[0].voices[0].events[0].durationTicks).toBe(
       320
     );
-    expect(warnings.some(w => /ornament/i.test(w))).toBe(true);
-    expect(warnings.some(w => /tuplet/i.test(w))).toBe(true);
+    // The turn is now read onto the note rather than reported as unsupported.
+    const first = score.tracks[0].measures[0].voices[0].events[0];
+    expect(isNoteEvent(first) && first.ornament).toBe('turn');
+    expect(warnings.some(w => /ornament/i.test(w))).toBe(false);
+    // `<duration>` already carries the scaling, so the tick length above is
+    // correct and nothing is simplified.
+    expect(warnings.some(w => /tuplet/i.test(w))).toBe(false);
+  });
+
+  it('scales a tuplet that states only its written type', () => {
+    // The fallback path: no <duration>, so the ratio has to be applied or the
+    // note imports a third too long.
+    const xml = MINIMAL_HEADER(`<measure number="1">
+<attributes><divisions>480</divisions><time><beats>4</beats><beat-type>4</beat-type></time></attributes>
+<note><pitch><step>C</step><octave>4</octave></pitch><voice>1</voice><type>eighth</type><time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification></note>
+</measure>`);
+    const { score } = importMusicXml(xml, parser, TEST_MUSICXML_WARNINGS);
+    // An eighth is 240 ticks; a triplet eighth is 160.
+    expect(score.tracks[0].measures[0].voices[0].events[0].durationTicks).toBe(
+      160
+    );
   });
 
   it('approximates an unsupported clef as treble with a warning', () => {
@@ -375,7 +424,7 @@ describe('importMusicXml: unsupported/decorative elements never throw, and are r
     expect(warnings.some(w => /clef/i.test(w))).toBe(false);
   });
 
-  it('keeps the first clef and drops a mid-score clef change with a warning naming the measure (Track has no per-measure clef)', () => {
+  it('keeps the first clef on the track and records a mid-score change on the bar it happens', () => {
     const xml = MINIMAL_HEADER(`<measure number="1">
 <attributes><divisions>480</divisions><time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>
 <note><pitch><step>C</step><octave>5</octave></pitch><duration>1920</duration><voice>1</voice><type>whole</type></note>
@@ -389,17 +438,18 @@ describe('importMusicXml: unsupported/decorative elements never throw, and are r
       parser,
       TEST_MUSICXML_WARNINGS
     );
-    // The track keeps the FIRST clef (treble) rather than silently
-    // flipping to whatever clef was last seen anywhere in the part.
+    // The part's own clef is still the FIRST one seen, rather than whatever
+    // clef was last seen anywhere in it.
     expect(score.tracks[0].clef).toBe('treble');
-    // Notes themselves are still imported correctly regardless of clef;
-    // only the *rendered staff* would be affected, and that's out of
-    // scope for the domain model (no per-measure clef field to hold it).
-    const notes = score.tracks[0].measures.flatMap(m => m.voices[0].events);
+    // The change is now carried on the bar it happens on, and nowhere else —
+    // it used to be dropped with a warning.
+    const measures = score.tracks[0].measures;
+    expect(measures[0].clef).toBeUndefined();
+    expect(measures[1].clef).toBe('bass');
+    expect(warnings.some(w => /clef/i.test(w))).toBe(false);
+
+    const notes = measures.flatMap(m => m.voices[0].events);
     expect(notes.map(n => n.durationTicks)).toEqual([1920, 1920]);
-    expect(warnings.some(w => /clef change.*measure 2.*dropped/i.test(w))).toBe(
-      true
-    );
   });
 
   it('keeps the previous time signature (not 4/4) on a senza-misura/malformed <time>, and says so', () => {

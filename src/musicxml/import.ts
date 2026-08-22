@@ -16,14 +16,22 @@
  * every imported note is given the domain default velocity, 80.
  */
 import { createId } from '@sudobility/music_types';
+import { DYNAMICS } from '@sudobility/music_types';
 import type { XmlElement, XmlParser } from '@sudobility/music_types';
 import type {
   Accidental,
+  BarlineStyle,
   Clef,
+  RepeatJump,
+  Dynamic,
+  GraceNote,
+  Hairpin,
+  Lyric,
   KeySignature,
   Measure,
   MusicalEvent,
   NoteEvent,
+  Ottava,
   Pitch,
   PitchStep,
   RestEvent,
@@ -95,13 +103,8 @@ export type MusicXmlWarnings = {
   unsupportedKeyMode: (mode: string) => string;
   unsupportedTime: (measureNumber: number) => string;
   complexTimeSignature: string;
-  clefChangeDropped: (clef: string, measureNumber: number) => string;
   unsupportedPitchStep: (step: string) => string;
   alterRounded: (alter: string, clamped: number) => string;
-  graceNotes: string;
-  lyrics: string;
-  tuplets: string;
-  ornaments: string;
   unsupportedNotation: (tag: string) => string;
   unsupportedNoteElement: (tag: string) => string;
   unsupportedArticulation: (tag: string) => string;
@@ -202,13 +205,30 @@ type MeasureState = {
   timeSignature: TimeSignature;
   keySignature: KeySignature;
   /**
-   * `null` until the first `<clef>` is seen, after which it's locked: the
-   * domain model's `Track.clef` is a single track-wide value (`Measure` has
-   * no per-measure clef), so a mid-part clef *change* can't be represented
-   * at all — the first clef wins and any later, differing clef is dropped
-   * with a warning (see `applyAttributes`), never silently overwriting it.
+   * The clef currently **in force**, `null` until the first `<clef>` is seen.
+   *
+   * Follows every change, so the next one is measured against what is actually
+   * being read rather than against the clef the part opened in. It is
+   * therefore *not* what `Track.clef` takes — see `firstClef`.
    */
   clef: Clef | null;
+  /**
+   * The first clef the part stated, which is what `Track.clef` holds.
+   *
+   * Kept apart from `clef` deliberately: they were one field while a mid-part
+   * change was impossible to represent, and merging them again makes an
+   * imported part adopt whatever clef it happened to *end* in.
+   */
+  firstClef: Clef | null;
+  /**
+   * A clef change seen in this measure's `<attributes>`, to be written onto
+   * the measure being built and then cleared.
+   *
+   * Separate from `clef`, which tracks what is *in force*: the measure only
+   * carries the marking on the bar where it changes, so the two answer
+   * different questions.
+   */
+  clefChange?: Clef;
 };
 
 function applyAttributes(
@@ -240,9 +260,9 @@ function applyAttributes(
     const beatsEls = directChildren(timeEl, 'beats');
     const beatTypeEls = directChildren(timeEl, 'beat-type');
     if (beatsEls.length === 0 || beatTypeEls.length === 0) {
-      warnings.add(
-        `A senza-misura or otherwise unsupported <time> element at measure ${measureNumber} did not change the time signature; the previous value was kept (4/4 if none had been set yet).`
-      );
+      // Through the contract, not as a literal: a warning baked in English
+      // here reaches a reader in English whatever language the host is in.
+      warnings.add(warnings.text.unsupportedTime(measureNumber));
     } else {
       if (beatsEls.length > 1) {
         warnings.add(warnings.text.complexTimeSignature);
@@ -264,14 +284,16 @@ function applyAttributes(
   if (clefEl) {
     const clef = parseClef(clefEl, warnings);
     if (state.clef === null) {
-      // First clef seen for this part locks the track's clef: the domain
-      // model (`Track.clef`) has no per-measure clef, so only one clef per
-      // track can be represented at all (see `MeasureState.clef`'s doc).
+      // The first clef establishes the part's own clef.
       state.clef = clef;
+      state.firstClef = clef;
     } else if (clef !== state.clef) {
-      warnings.add(
-        `A clef change to ${clef} at measure ${measureNumber} was dropped (the domain model supports only one clef per track); the track kept its first clef, ${state.clef}.`
-      );
+      // A change. No longer dropped: `Measure.clef` records it and the bar
+      // reads in the new clef from here on. `state.clef` follows so the *next*
+      // change is measured against what is now in force rather than against
+      // the clef the part opened in.
+      state.clefChange = clef;
+      state.clef = clef;
     }
   }
 }
@@ -284,6 +306,22 @@ type RawEvent = {
   pitch: Pitch | null; // null => rest
   voiceNumber: string;
   articulation?: NoteEvent['articulation'];
+  fermata?: boolean;
+  ornament?: NoteEvent['ornament'];
+  hairpinStart?: Hairpin;
+  hairpinStop?: boolean;
+  arpeggiate?: boolean;
+  glissandoStart?: boolean;
+  glissandoStop?: boolean;
+  fingering?: string;
+  ottavaStart?: Ottava;
+  ottavaStop?: boolean;
+  dynamic?: Dynamic;
+  slurStart?: boolean;
+  slurStop?: boolean;
+  lyric?: Lyric;
+  chordSymbol?: string;
+  graceNotes?: GraceNote[];
   tieStart?: boolean;
   tieStop?: boolean;
 };
@@ -341,6 +379,26 @@ const SILENTLY_IGNORED_NOTE_CHILDREN = new Set([
   'listen',
 ]);
 
+/**
+ * The syllable sung on a note, or `undefined` when it carries none.
+ *
+ * `single` is the model's default and is not stored, so an ordinary one-word
+ * syllable round-trips without carrying a redundant field.
+ */
+function parseLyric(noteEl: XmlElement): Lyric | undefined {
+  const lyricEl = directChild(noteEl, 'lyric');
+  if (!lyricEl) return undefined;
+  const text = directChild(lyricEl, 'text')?.textContent?.trim();
+  if (!text) return undefined;
+  const syllabic = directChild(lyricEl, 'syllabic')?.textContent ?? undefined;
+  return {
+    text,
+    ...(syllabic && syllabic !== 'single'
+      ? { syllabic: syllabic as NonNullable<Lyric['syllabic']> }
+      : {}),
+  };
+}
+
 function warnUnsupportedNoteChildren(
   noteEl: XmlElement,
   warnings: WarningCollector
@@ -348,20 +406,43 @@ function warnUnsupportedNoteChildren(
   for (const child of Array.from(noteEl.children)) {
     if (SILENTLY_IGNORED_NOTE_CHILDREN.has(child.tagName)) continue;
     if (child.tagName === 'grace') {
-      warnings.add(warnings.text.graceNotes);
+      // Read now: a `<grace/>` note is attached to the note it decorates
+      // rather than dropped.
+      continue;
     } else if (child.tagName === 'lyric') {
-      warnings.add(warnings.text.lyrics);
+      // Read in `parseLyric`, so no longer dropped and no longer warned about.
+      continue;
     } else if (child.tagName === 'time-modification') {
-      warnings.add(warnings.text.tuplets);
+      // No longer simplified: `<duration>` already carries the scaling — a
+      // triplet eighth genuinely has two thirds of an eighth's divisions — so
+      // the imported tick length is the right one, and the model expresses it
+      // as a `triplet-*` duration. `parseTimeModification` covers the case
+      // where a note states only its `<type>`.
+      continue;
     } else if (child.tagName === 'notations') {
       for (const notationChild of Array.from(child.children)) {
         if (
           notationChild.tagName === 'articulations' ||
-          notationChild.tagName === 'tied'
+          notationChild.tagName === 'tied' ||
+          notationChild.tagName === 'slur' ||
+          // Read in `parseFermata`, so no longer dropped and no longer warned
+          // about.
+          notationChild.tagName === 'fermata' ||
+          // Read just below, onto the note.
+          notationChild.tagName === 'arpeggiate' ||
+          // Both read just below, onto the note.
+          notationChild.tagName === 'glissando' ||
+          notationChild.tagName === 'technical' ||
+          // The bracket. Its scaling rides on `<time-modification>` and the
+          // tick length, so there is nothing more to read here — but it is
+          // understood, not ignored, and must not be reported as unsupported.
+          notationChild.tagName === 'tuplet'
         )
           continue;
         if (notationChild.tagName === 'ornaments') {
-          warnings.add(warnings.text.ornaments);
+          // Read in `parseOrnament`. A sign this model does not carry still
+          // warns, so nothing is dropped silently — see there.
+          continue;
         } else {
           warnings.add(
             warnings.text.unsupportedNotation(notationChild.tagName)
@@ -373,6 +454,45 @@ function warnUnsupportedNoteChildren(
     }
   }
 }
+
+/**
+ * The ornament sign on `noteEl`, if it carries one this model can hold.
+ *
+ * MusicXML's `<ornaments>` is a much wider vocabulary than four signs — it
+ * also carries `<wavy-line>`, `<schleifer>`, `<tremolo>` and more, and may
+ * hold several at once. Anything unrecognised still warns rather than
+ * vanishing, and the first recognised sign wins: the model stores one.
+ */
+function parseOrnament(
+  noteEl: XmlElement,
+  warnings: WarningCollector
+): NoteEvent['ornament'] | undefined {
+  const notations = directChild(noteEl, 'notations');
+  const ornamentsEl = notations ? directChild(notations, 'ornaments') : null;
+  if (!ornamentsEl) return undefined;
+
+  let found: NoteEvent['ornament'] | undefined;
+  for (const child of Array.from(ornamentsEl.children)) {
+    const mapped = ORNAMENT_FROM_ELEMENT[child.tagName];
+    if (mapped) {
+      if (found === undefined) found = mapped;
+      continue;
+    }
+    // `<accidental-mark>` qualifies a sign rather than being one, so it is
+    // not a dropped ornament and must not be reported as one.
+    if (child.tagName === 'accidental-mark') continue;
+    warnings.add(warnings.text.unsupportedNotation(child.tagName));
+  }
+  return found;
+}
+
+/** MusicXML `<ornaments>` child -> domain ornament. The words line up here. */
+const ORNAMENT_FROM_ELEMENT: Record<string, NoteEvent['ornament']> = {
+  'trill-mark': 'trill',
+  mordent: 'mordent',
+  'inverted-mordent': 'inverted-mordent',
+  turn: 'turn',
+};
 
 function parseArticulation(
   noteEl: XmlElement,
@@ -405,6 +525,8 @@ function parseArticulation(
 }
 
 type ParsedNote = {
+  /** Set when this `<note>` was an ornament, to attach to the next real note. */
+  graceNote?: GraceNote;
   /** `null` when this note must be skipped (grace note, or unsupported/malformed content). */
   raw: RawEvent | null;
   /**
@@ -432,8 +554,30 @@ function parseNote(
 ): ParsedNote {
   warnUnsupportedNoteChildren(noteEl, warnings);
 
-  if (directChild(noteEl, 'grace')) {
-    return { raw: null, cursorAdvance: 0 };
+  /*
+    A grace note: no `<duration>`, so it advances nothing, and it is held to be
+    attached to the note it decorates rather than dropped. `graceNote` is
+    returned separately from `raw` because it is not an event of its own — the
+    model hangs it off its principal.
+  */
+  const graceEl = directChild(noteEl, 'grace');
+  if (graceEl) {
+    const pitchElement = directChild(noteEl, 'pitch');
+    if (!pitchElement) return { raw: null, cursorAdvance: 0 };
+    const typeText = textOf(noteEl, 'type');
+    const dots = directChildren(noteEl, 'dot').length;
+    return {
+      raw: null,
+      cursorAdvance: 0,
+      graceNote: {
+        pitch: parsePitch(pitchElement, warnings),
+        durationTicks:
+          typeText && isMusicXmlNoteType(typeText)
+            ? ticksForNotatedType(typeText, dots, SCORE_PPQ)
+            : ticksForNotatedType('eighth', 0, SCORE_PPQ),
+        ...(graceEl.getAttribute('slash') === 'yes' ? { slashed: true } : {}),
+      },
+    };
   }
 
   const restEl = directChild(noteEl, 'rest');
@@ -446,6 +590,25 @@ function parseNote(
       unpitchedEl ? warnings.text.unpitched : warnings.text.noPitchOrRest
     );
   }
+
+  /*
+    The tuplet ratio, when a note carries one.
+
+    Only needed for the `<type>`-without-`<duration>` fallback below:
+    `<duration>` is stated in divisions and already scaled, so a triplet
+    eighth arrives at the right tick length with no help. A note giving only
+    its written type would otherwise import a third too long.
+  */
+  const timeModEl = directChild(noteEl, 'time-modification');
+  const actualNotes = Number(textOf(timeModEl ?? noteEl, 'actual-notes'));
+  const normalNotes = Number(textOf(timeModEl ?? noteEl, 'normal-notes'));
+  const tupletRatio =
+    timeModEl &&
+    Number.isFinite(actualNotes) &&
+    Number.isFinite(normalNotes) &&
+    actualNotes > 0
+      ? normalNotes / actualNotes
+      : 1;
 
   const durationEl = directChild(noteEl, 'duration');
   let durationTicks: number;
@@ -460,7 +623,9 @@ function parseNote(
     const typeText = textOf(noteEl, 'type');
     const dots = directChildren(noteEl, 'dot').length;
     if (typeText && isMusicXmlNoteType(typeText)) {
-      durationTicks = ticksForNotatedType(typeText, dots, SCORE_PPQ);
+      durationTicks = Math.round(
+        ticksForNotatedType(typeText, dots, SCORE_PPQ) * tupletRatio
+      );
     } else {
       warnings.add(warnings.text.noDuration);
       return { raw: null, cursorAdvance: 0 };
@@ -484,6 +649,52 @@ function parseNote(
   const tieStart = tieEls.some(t => t.getAttribute('type') === 'start');
   const tieStop = tieEls.some(t => t.getAttribute('type') === 'stop');
 
+  // A phrase mark, which lives inside `<notations>` rather than beside the
+  // `<tie>` elements — a slur is a property of the note, unlike a dynamic.
+  const notationsEl = directChild(noteEl, 'notations');
+  const slurEls = notationsEl ? directChildren(notationsEl, 'slur') : [];
+  const slurStart = slurEls.some(el => el.getAttribute('type') === 'start');
+  const slurStop = slurEls.some(el => el.getAttribute('type') === 'stop');
+
+  /*
+    A pause, also a `<notations>` child. Its presence is the whole marking —
+    the `type` attribute only says which way the glyph is drawn, which the
+    renderer decides for itself from the stem, and `<fermata>` with no
+    attribute at all is both legal and common.
+
+    Only on notes: the model carries a fermata on a `NoteEvent`, so one written
+    over a rest is dropped rather than misfiled onto the following note.
+  */
+  const arpeggiate =
+    !restEl &&
+    notationsEl !== null &&
+    directChildren(notationsEl, 'arpeggiate').length > 0;
+
+  const glissandoEls = notationsEl
+    ? directChildren(notationsEl, 'glissando')
+    : [];
+  const glissandoStart = glissandoEls.some(
+    el => el.getAttribute('type') === 'start'
+  );
+  const glissandoStop = glissandoEls.some(
+    el => el.getAttribute('type') === 'stop'
+  );
+  const technicalEl = notationsEl
+    ? directChild(notationsEl, 'technical')
+    : null;
+  const fingering = technicalEl
+    ? (directChild(technicalEl, 'fingering')?.textContent ?? '').trim() ||
+      undefined
+    : undefined;
+
+  const fermata = restEl
+    ? false
+    : notationsEl !== null && directChildren(notationsEl, 'fermata').length > 0;
+
+  const ornament = restEl ? undefined : parseOrnament(noteEl, warnings);
+
+  const lyric = restEl ? undefined : parseLyric(noteEl);
+
   const raw: RawEvent = {
     startTick: cursor,
     durationTicks,
@@ -492,6 +703,15 @@ function parseNote(
     articulation,
     tieStart,
     tieStop,
+    ...(lyric ? { lyric } : {}),
+    ...(slurStart ? { slurStart: true } : {}),
+    ...(slurStop ? { slurStop: true } : {}),
+    ...(fermata ? { fermata: true } : {}),
+    ...(arpeggiate ? { arpeggiate: true } : {}),
+    ...(glissandoStart ? { glissandoStart: true } : {}),
+    ...(glissandoStop ? { glissandoStop: true } : {}),
+    ...(fingering ? { fingering } : {}),
+    ...(ornament ? { ornament } : {}),
   };
   return { raw, cursorAdvance: durationTicks };
 }
@@ -549,6 +769,22 @@ function fillAndClip(
         ...(item.tieStart ? { tieStart: true } : {}),
         ...(item.tieStop ? { tieStop: true } : {}),
         ...(item.articulation ? { articulation: item.articulation } : {}),
+        ...(item.fermata ? { fermata: true } : {}),
+        ...(item.ornament ? { ornament: item.ornament } : {}),
+        ...(item.hairpinStart ? { hairpinStart: item.hairpinStart } : {}),
+        ...(item.hairpinStop ? { hairpinStop: true } : {}),
+        ...(item.arpeggiate ? { arpeggiate: true } : {}),
+        ...(item.glissandoStart ? { glissandoStart: true } : {}),
+        ...(item.glissandoStop ? { glissandoStop: true } : {}),
+        ...(item.fingering ? { fingering: item.fingering } : {}),
+        ...(item.ottavaStart ? { ottavaStart: item.ottavaStart } : {}),
+        ...(item.ottavaStop ? { ottavaStop: true } : {}),
+        ...(item.dynamic ? { dynamic: item.dynamic } : {}),
+        ...(item.slurStart ? { slurStart: true } : {}),
+        ...(item.slurStop ? { slurStop: true } : {}),
+        ...(item.lyric ? { lyric: item.lyric } : {}),
+        ...(item.graceNotes?.length ? { graceNotes: item.graceNotes } : {}),
+        ...(item.chordSymbol ? { chordSymbol: item.chordSymbol } : {}),
       };
       events.push(note);
     } else {
@@ -594,6 +830,31 @@ function parseMeasure(
   let cursor = 0;
   /** The position `<chord/>`-flagged notes attach to: the cursor value at the start of the current (non-chord) note. */
   let lastNoteStart = 0;
+  /** Set by a `<direction>`, consumed by the next `<note>` it applies from. */
+  let pendingDynamic: Dynamic | undefined;
+  let pendingHairpin: Hairpin | undefined;
+  let pendingOttava: Ottava | undefined;
+  let barlineStyle: BarlineStyle | undefined;
+  let navSegno = false;
+  let navCoda = false;
+  let navToCoda = false;
+  let navFine = false;
+  let navJump: RepeatJump | undefined;
+  /** The last pitched note parsed, for a hairpin close that follows it. */
+  let lastNoteRaw: RawEvent | undefined;
+  /** Set by a `<harmony>`, consumed by the note it sits over — same shape. */
+  let pendingChordSymbol: string | undefined;
+  /** Repeat structure, collected from this measure's `<barline>` elements. */
+  let repeatStart = false;
+  let repeatEnd = false;
+  let endingNumbers: number[] | undefined;
+  /**
+   * Ornaments read so far, waiting for the note they decorate.
+   *
+   * MusicXML writes them *before* their principal, so by the time it is parsed
+   * they have already gone past — the same shape of problem as a dynamic.
+   */
+  let pendingGraceNotes: GraceNote[] = [];
 
   const knownTags = new Set([
     'attributes',
@@ -613,6 +874,93 @@ function parseMeasure(
         break;
 
       case 'direction': {
+        /*
+          A dynamic marking. Held until the next `<note>`, which is the one it
+          applies from — MusicXML places the direction *before* that note, so
+          by the time the note is parsed the marking has already gone past.
+        */
+        const dynamicsEl = directChild(
+          directChild(child, 'direction-type') ?? child,
+          'dynamics'
+        );
+        const markName = dynamicsEl?.children[0]?.tagName;
+        if (markName && (DYNAMICS as readonly string[]).includes(markName)) {
+          pendingDynamic = markName as Dynamic;
+        }
+
+        /*
+          A hairpin. Its opening applies to the *next* note, like a dynamic —
+          MusicXML places the direction before it. Its close applies to the
+          note most recently parsed, because the exporter writes the stop
+          after the note it covers, which is the only way a wedge can actually
+          span that note.
+        */
+        /*
+          An octave bracket. Like the wedge: the opening applies to the next
+          note, the close to the one already parsed. MusicXML names the
+          direction the *notes* move, which is the opposite of the sound —
+          `down` on the page is `8va` to a player.
+        */
+        const shiftEl = directChild(
+          directChild(child, 'direction-type') ?? child,
+          'octave-shift'
+        );
+        const shiftType = shiftEl?.getAttribute('type');
+        if (shiftType === 'down' || shiftType === 'up') {
+          const size = Number(shiftEl?.getAttribute('size') ?? '8');
+          pendingOttava =
+            shiftType === 'down'
+              ? size >= 15
+                ? '15ma'
+                : '8va'
+              : size >= 15
+                ? '15mb'
+                : '8vb';
+        } else if (shiftType === 'stop' && lastNoteRaw) {
+          lastNoteRaw.ottavaStop = true;
+        }
+
+        const wedgeEl = directChild(
+          directChild(child, 'direction-type') ?? child,
+          'wedge'
+        );
+        const wedgeType = wedgeEl?.getAttribute('type');
+        if (wedgeType === 'crescendo' || wedgeType === 'diminuendo') {
+          pendingHairpin = wedgeType;
+        } else if (wedgeType === 'stop' && lastNoteRaw) {
+          lastNoteRaw.hairpinStop = true;
+        }
+
+        /*
+          The navigation marks. Read from `<sound>` where it is present —
+          `dacapo`, `dalsegno`, `fine`, `tocoda`, `segno`, `coda` — because
+          that is the unambiguous half; the `<words>` beside it are free text
+          and say "D.C. al Fine" in as many spellings as there are engravers.
+          The bare `<segno/>` and `<coda/>` direction-types are read too, since
+          a score may mark the places without a `<sound>` on them.
+        */
+        const dirType = directChild(child, 'direction-type');
+        const sound = directChild(child, 'sound');
+        if (dirType && directChild(dirType, 'segno')) navSegno = true;
+        if (dirType && directChild(dirType, 'coda')) navCoda = true;
+        if (sound?.getAttribute('segno')) navSegno = true;
+        if (sound?.getAttribute('coda')) navCoda = true;
+        if (sound?.getAttribute('tocoda')) navToCoda = true;
+        if (sound?.getAttribute('fine')) navFine = true;
+        const dacapo = sound?.getAttribute('dacapo');
+        const dalsegno = sound?.getAttribute('dalsegno');
+        if (dacapo || dalsegno) {
+          const wordsEl = dirType ? directChild(dirType, 'words') : null;
+          const words = (wordsEl?.textContent ?? '').toLowerCase();
+          const target = words.includes('coda')
+            ? '-al-coda'
+            : words.includes('fine')
+              ? '-al-fine'
+              : '';
+          navJump = ((dalsegno ? 'dal-segno' : 'da-capo') +
+            target) as RepeatJump;
+        }
+
         const soundEl = directChild(child, 'sound');
         const tempoAttr = soundEl?.getAttribute('tempo');
         if (tempoAttr) {
@@ -632,6 +980,25 @@ function parseMeasure(
         break;
       }
 
+      case 'harmony': {
+        /*
+          Rebuilt from the root plus the kind's display text, which is how it
+          was written: `<kind>`'s enumerated value is deliberately not consulted
+          because the text is what a player reads and what round-trips.
+        */
+        const rootEl = directChild(child, 'root');
+        const step = rootEl ? textOf(rootEl, 'root-step') : null;
+        if (step) {
+          const alter = Number(rootEl ? textOf(rootEl, 'root-alter') : '0');
+          const accidental = alter === 1 ? '#' : alter === -1 ? 'b' : '';
+          const kindEl = directChild(child, 'kind');
+          const quality =
+            kindEl?.getAttribute('text') ?? kindEl?.textContent?.trim() ?? '';
+          pendingChordSymbol = `${step}${accidental}${quality === 'other' ? '' : quality}`;
+        }
+        break;
+      }
+
       case 'note': {
         const isChord = Boolean(directChild(child, 'chord'));
         // A chord note shares its "root" (the preceding non-chord note)'s
@@ -643,14 +1010,44 @@ function parseMeasure(
           state.timeSignature,
           SCORE_PPQ
         );
-        const { raw, cursorAdvance } = parseNote(
+        const parsed = parseNote(
           child,
           eventStart,
           measureEndTick,
           state.ratio,
           warnings
         );
+        const { raw, cursorAdvance } = parsed;
+        if (parsed.graceNote) {
+          pendingGraceNotes.push(parsed.graceNote);
+        }
         if (raw) {
+          // Ornaments belong to the next sounding note, never to a rest.
+          if (pendingGraceNotes.length > 0 && raw.pitch !== null) {
+            raw.graceNotes = pendingGraceNotes;
+            pendingGraceNotes = [];
+          }
+          // Only a pitched note carries a dynamic: a rest has nothing to
+          // sound at that level, and MusicXML would not put one on it.
+          if (pendingChordSymbol && raw.pitch !== null) {
+            raw.chordSymbol = pendingChordSymbol;
+            pendingChordSymbol = undefined;
+          }
+          if (pendingDynamic && raw.pitch !== null) {
+            raw.dynamic = pendingDynamic;
+            pendingDynamic = undefined;
+          }
+          if (pendingOttava && raw.pitch !== null) {
+            raw.ottavaStart = pendingOttava;
+            pendingOttava = undefined;
+          }
+          if (pendingHairpin && raw.pitch !== null) {
+            raw.hairpinStart = pendingHairpin;
+            pendingHairpin = undefined;
+          }
+          // Remembered so a `<wedge type="stop"/>` arriving after this note
+          // can close its hairpin on it.
+          if (raw.pitch !== null) lastNoteRaw = raw;
           const bucket = buckets.get(raw.voiceNumber) ?? [];
           buckets.set(raw.voiceNumber, bucket);
           bucket.push(raw);
@@ -674,8 +1071,41 @@ function parseMeasure(
         break;
       }
 
+      case 'barline': {
+        /*
+          Repeat barlines and volta brackets.
+
+          MusicXML states them per side — a forward repeat and an ending's
+          start on the left, a backward repeat and its stop on the right — so
+          both locations are read into the one measure the model stores them
+          on. The ending's numbers come from the `number` attribute, which is a
+          comma-separated list for a bar played on more than one pass.
+        */
+        const repeat = directChild(child, 'repeat');
+        const direction = repeat?.getAttribute('direction');
+        if (direction === 'forward') repeatStart = true;
+        if (direction === 'backward') repeatEnd = true;
+
+        const ending = directChild(child, 'ending');
+        const numbers = ending?.getAttribute('number');
+        if (numbers) {
+          const parsed = numbers
+            .split(',')
+            .map(part => Number(part.trim()))
+            .filter(n => Number.isInteger(n) && n > 0);
+          if (parsed.length > 0) endingNumbers = parsed;
+        }
+        // A section break or the end of the piece. Repeat barlines are read
+        // separately below; this is only the *style* of the line.
+        const styleEl = directChild(child, 'bar-style');
+        const style = styleEl?.textContent?.trim();
+        if (style === 'light-heavy') barlineStyle = 'final';
+        else if (style === 'light-light') barlineStyle = 'double';
+
+        break;
+      }
+
       case 'print':
-      case 'barline':
       case 'sound':
         break;
 
@@ -691,7 +1121,31 @@ function parseMeasure(
   // applied to `state`) so a measure whose own <attributes> changes the
   // time signature sizes itself by the *new* signature, not whatever was
   // in effect when this measure started.
-  const durationTicks = measureDurationTicks(state.timeSignature, SCORE_PPQ);
+  const fullMeasureTicks = measureDurationTicks(state.timeSignature, SCORE_PPQ);
+  /*
+    A pickup is short by definition, and how short is decided by what is
+    written in it rather than by the time signature — MusicXML states the bar
+    is `implicit` and lets its content give the length. Sizing it by the
+    signature instead would import an anacrusis as a full bar padded with
+    rests, which is a different piece of music.
+
+    Clamped to a full bar so a malformed `implicit` measure cannot produce one
+    longer than its own signature allows.
+  */
+  const isPickup = measureEl.getAttribute('implicit') === 'yes';
+  const contentTicks = Math.max(
+    0,
+    ...[...buckets.values()].map(items =>
+      items.reduce(
+        (sum, item) => Math.max(sum, item.startTick + item.durationTicks),
+        0
+      )
+    )
+  );
+  const durationTicks =
+    isPickup && contentTicks > 0
+      ? Math.min(contentTicks, fullMeasureTicks)
+      : fullMeasureTicks;
 
   const voiceNumbers = [...buckets.keys()].sort(
     (a, b) => Number(a) - Number(b) || a.localeCompare(b)
@@ -723,7 +1177,24 @@ function parseMeasure(
     timeSignature: state.timeSignature,
     keySignature: state.keySignature,
     voices,
+    ...(repeatStart ? { repeatStart: true } : {}),
+    ...(repeatEnd ? { repeatEnd: true } : {}),
+    ...(endingNumbers ? { endingNumbers } : {}),
+    // Cleared as it is consumed: the marking belongs to the bar the change
+    // happens on, and leaving it set would stamp every following bar too.
+    ...(state.clefChange ? { clef: state.clefChange } : {}),
+    // MusicXML's own word for a bar that is not counted. Read rather than
+    // inferred from a short duration: a short bar mid-score is an irregular
+    // bar, which is numbered.
+    ...(isPickup ? { pickup: true } : {}),
+    ...(barlineStyle ? { barline: barlineStyle } : {}),
+    ...(navSegno ? { segno: true } : {}),
+    ...(navCoda ? { coda: true } : {}),
+    ...(navToCoda ? { toCoda: true } : {}),
+    ...(navFine ? { fine: true } : {}),
+    ...(navJump ? { jump: navJump } : {}),
   };
+  delete state.clefChange;
 
   return { measure, tempoEvents };
 }
@@ -742,6 +1213,7 @@ function parsePart(
     timeSignature: DEFAULT_TIME_SIGNATURE,
     keySignature: DEFAULT_KEY_SIGNATURE,
     clef: null,
+    firstClef: null,
   };
 
   const measures: Measure[] = [];
@@ -778,7 +1250,8 @@ function parsePart(
       15,
       Math.max(0, Math.round((meta?.midiChannel ?? 1) - 1))
     ),
-    clef: state.clef ?? 'treble',
+    // The clef the part *opened* in, not the one it ended in.
+    clef: state.firstClef ?? 'treble',
     volume: 1,
     pan: 0,
     muted: false,

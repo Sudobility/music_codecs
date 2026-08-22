@@ -29,14 +29,8 @@ function scoreWithNotes(
   const byVoice = new Map<number, NoteEvent[]>();
   for (const n of notes) {
     const v = n.voice ?? 0;
-    // One lookup, and no assertion: `has` + `get!` asks the map twice and
-    // states a guarantee the compiler cannot see.
-    let voiceNotes = byVoice.get(v);
-    if (!voiceNotes) {
-      voiceNotes = [];
-      byVoice.set(v, voiceNotes);
-    }
-    voiceNotes.push({
+    if (!byVoice.has(v)) byVoice.set(v, []);
+    byVoice.get(v)!.push({
       id: createId(),
       pitch: midiToPitch(n.midi),
       startTick: n.startTick,

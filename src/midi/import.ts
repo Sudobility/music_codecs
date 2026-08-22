@@ -355,6 +355,8 @@ function trimSamePitchOverlaps(notes: NoteEvent[]): {
     }
   }
 
+  // The map only ever holds trimmed versions of these same notes, so the
+  // original is the right answer if one is somehow absent.
   return { notes: notes.map(note => byId.get(note.id) ?? note), trimmedCount };
 }
 

@@ -31,4 +31,22 @@ export default [
       '@typescript-eslint/no-empty-object-type': 'off',
     },
   },
+  {
+    /*
+      Tests may assert non-null — the same rule, and the same reasoning, as
+      music_types.
+
+      In shipping code `x!` states a guarantee nobody checked and the failure
+      surfaces far from its cause. A test is the opposite: `result.find(...)!`
+      is followed immediately by an assertion *about* that value, so a wrong
+      assumption fails the test, which is the test's whole purpose.
+
+      Scoped to tests deliberately rather than turned off: the five production
+      instances in this package were replaced with real checks instead.
+    */
+    files: ['src/**/*.test.ts'],
+    rules: {
+      '@typescript-eslint/no-non-null-assertion': 'off',
+    },
+  },
 ];
