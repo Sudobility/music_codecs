@@ -25,7 +25,7 @@ import type {
 } from '@sudobility/music_types';
 import { isNoteEvent } from '@sudobility/music_types';
 import type { NotatedDuration } from './duration-map.js';
-import { tupletGroups } from '@sudobility/music_types';
+import { beamGroups, tupletGroups } from '@sudobility/music_types';
 import { parseChordSymbol } from '@sudobility/music_types';
 import { notateDuration } from './duration-map.js';
 import { barNumberAt } from '@sudobility/music_types';
@@ -182,6 +182,8 @@ type NoteSegmentOptions = {
     normalNotes: number;
     position: 'start' | 'middle' | 'stop';
   };
+  /** Where this note sits in its beam group, if it is beamed at all. */
+  beam?: 'begin' | 'continue' | 'end';
   segment: NotatedDuration;
   tieStop: boolean;
   tieStart: boolean;
@@ -312,6 +314,28 @@ function buildPitchedNoteXml(
     ? `<time-modification><actual-notes>${opts.tuplet.actualNotes}</actual-notes>` +
       `<normal-notes>${opts.tuplet.normalNotes}</normal-notes></time-modification>`
     : '';
+  /*
+    The beam.
+
+    Derived by `beamGroups`, the same function the renderer groups by, so the
+    exported file and the drawn page cannot disagree about how a bar is
+    beamed. MusicXML has no "break here": it wants a complete
+    `begin`/`continue`/`end` run, which is exactly why the grouping had to
+    become a shared derivation rather than staying inside the renderer.
+
+    Only on the first segment, and never on a chord's non-root member — the
+    beam belongs to the stem, and one is drawn per chord rather than per
+    notehead.
+
+    `number="1"` is the eighth-note beam. A 16th carries a second beam and a
+    32nd a third; those are left out deliberately, since MusicXML readers
+    infer the secondary beams from `<type>`, and stating them wrongly is worse
+    than leaving them to be inferred.
+  */
+  const beamXml =
+    opts.beam && !opts.isChord && opts.tieStop === false
+      ? `<beam number="1">${opts.beam}</beam>`
+      : '';
   const dots = '<dot/>'.repeat(opts.segment.dots);
 
   return (
@@ -324,6 +348,7 @@ function buildPitchedNoteXml(
     `<type>${opts.segment.type}</type>` +
     dots +
     timeModificationXml +
+    beamXml +
     notations +
     lyricXml +
     `</note>\n`
@@ -369,9 +394,40 @@ function groupByStartTick(events: MusicalEvent[]): MusicalEvent[][] {
 function buildVoiceEventsXml(
   voice: Voice,
   voiceNumber: number,
-  ppq: number
+  ppq: number,
+  measureStartTick: number,
+  timeSignature: TimeSignature
 ): string {
   let xml = '';
+
+  /*
+    Where each note sits in its beam, by event id.
+
+    `beamGroups` is the derivation the renderer reads too, which is what stops
+    the exported file from disagreeing with the drawn page. Keyed by id for
+    the same reason the tuplet map below is: the loop walks chord groups
+    rather than the flat event list.
+  */
+  const beamByEventId = new Map<string, 'begin' | 'continue' | 'end'>();
+  for (const group of beamGroups(
+    voice.events,
+    measureStartTick,
+    timeSignature,
+    ppq
+  )) {
+    group.indices.forEach((eventIndex, position) => {
+      const event = voice.events[eventIndex];
+      if (!event) return;
+      beamByEventId.set(
+        event.id,
+        position === 0
+          ? 'begin'
+          : position === group.indices.length - 1
+            ? 'end'
+            : 'continue'
+      );
+    });
+  }
 
   /*
     Which events belong to a tuplet, by event id.
@@ -545,6 +601,11 @@ function buildVoiceEventsXml(
           ...(segmentIndex === 0 && tupletByEventId.has(note.id)
             ? { tuplet: tupletByEventId.get(note.id) }
             : {}),
+          // Same first-segment rule: the beam belongs to the note, and a
+          // decomposed one would otherwise restart its group at every join.
+          ...(segmentIndex === 0 && beamByEventId.has(note.id)
+            ? { beam: beamByEventId.get(note.id) }
+            : {}),
         });
       });
     });
@@ -703,7 +764,13 @@ function buildMeasureXml(
       // rewinding by the full measure length always lands back at its start.
       xml += `<backup><duration>${measure.durationTicks}</duration></backup>\n`;
     }
-    xml += buildVoiceEventsXml(voice, voiceIndex + 1, ppq);
+    xml += buildVoiceEventsXml(
+      voice,
+      voiceIndex + 1,
+      ppq,
+      measure.startTick,
+      measure.timeSignature
+    );
   });
 
   const closesEnding =

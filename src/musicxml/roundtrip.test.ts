@@ -17,6 +17,7 @@ import { isNoteEvent } from '@sudobility/music_types';
 import type { Measure, NoteEvent, Score, Track } from '@sudobility/music_types';
 import { pitchToMidi } from '@sudobility/music_types';
 import { allNotes } from '@sudobility/music_types';
+import { beamGroups } from '@sudobility/music_types';
 import {
   changeArticulationCommand,
   changeOrnamentCommand,
@@ -1285,5 +1286,94 @@ describe('ottava, glissando and fingering round-trip', () => {
     expect(
       after.every(n => !n.ottavaStart && !n.glissandoStart && !n.fingering)
     ).toBe(true);
+  });
+});
+
+describe('beaming round-trip', () => {
+  /** Eight eighths in one 4/4 bar — two default beam groups of two per beat. */
+  function eighthBar(overrides: Record<number, 'break' | 'none'> = {}): Score {
+    const base = twinkleScore();
+    const track = base.tracks[0];
+    const measure = track.measures[0];
+    const ppq = base.ppq;
+    const dur = ppq / 2;
+    const events: NoteEvent[] = Array.from({ length: 8 }, (_, i) => ({
+      id: createId(),
+      trackId: track.id,
+      voiceId: measure.voices[0].id,
+      startTick: measure.startTick + i * dur,
+      durationTicks: dur,
+      pitch: { step: 'C', accidental: 0, octave: 5 },
+      velocity: 80,
+      ...(overrides[i] ? { beam: overrides[i] } : {}),
+    }));
+    return {
+      ...base,
+      tracks: [
+        {
+          ...track,
+          measures: [
+            { ...measure, voices: [{ ...measure.voices[0], events }] },
+          ],
+        },
+      ],
+    };
+  }
+
+  function beamsOf(score: Score): (string | undefined)[] {
+    return allNotes(score)
+      .sort((a, b) => a.startTick - b.startTick)
+      .map(n => n.beam);
+  }
+
+  it('writes <beam> for a plainly beamed bar', () => {
+    // Nothing was overridden, so the file states the default grouping — which
+    // is the point of deriving it rather than storing it.
+    const xml = exportMusicXml(eighthBar());
+    expect(xml).toContain('<beam number="1">begin</beam>');
+    expect(xml).toContain('<beam number="1">end</beam>');
+  });
+
+  it('stores no override when the file agrees with our default', () => {
+    // The model keeps only the disagreement. Importing every <beam> verbatim
+    // would fill a score with overrides that say nothing.
+    const { imported } = roundTrip(eighthBar());
+    expect(beamsOf(imported).every(b => b === undefined)).toBe(true);
+  });
+
+  it('round-trips a break', () => {
+    const { imported } = roundTrip(eighthBar({ 1: 'break' }));
+    expect(beamsOf(imported)[1]).toBe('break');
+  });
+
+  it('round-trips an unbeamed note', () => {
+    const { imported } = roundTrip(eighthBar({ 2: 'none' }));
+    expect(beamsOf(imported)[2]).toBe('none');
+  });
+
+  it('preserves the drawn grouping, not just the flags', () => {
+    // The property that actually matters: whatever the overrides were, the
+    // groups derived from the imported score must match the groups derived
+    // from the original. That is what "the file and the page agree" means.
+    for (const overrides of [
+      {},
+      { 1: 'break' as const },
+      { 2: 'none' as const },
+      { 1: 'break' as const, 5: 'break' as const },
+      { 0: 'break' as const },
+    ]) {
+      const source = eighthBar(overrides);
+      const { imported } = roundTrip(source);
+      const groupsOf = (s: Score) => {
+        const m = s.tracks[0].measures[0];
+        return beamGroups(
+          m.voices[0].events,
+          m.startTick,
+          m.timeSignature,
+          s.ppq
+        ).map(g => g.indices);
+      };
+      expect(groupsOf(imported)).toEqual(groupsOf(source));
+    }
   });
 });

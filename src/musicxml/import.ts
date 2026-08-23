@@ -16,6 +16,7 @@
  * every imported note is given the domain default velocity, 80.
  */
 import { createId } from '@sudobility/music_types';
+import { beamGroups, isNoteEvent } from '@sudobility/music_types';
 import { DYNAMICS } from '@sudobility/music_types';
 import type { XmlElement, XmlParser } from '@sudobility/music_types';
 import type {
@@ -324,6 +325,12 @@ type RawEvent = {
   graceNotes?: GraceNote[];
   tieStart?: boolean;
   tieStop?: boolean;
+  /**
+   * What the file said about beaming this note, before it is reconciled
+   * against our own derivation. Transient: it never reaches the model, which
+   * stores only the *disagreement* (`NoteEvent.beam`).
+   */
+  xmlBeam?: 'begin' | 'continue' | 'end';
 };
 
 function parseStep(text: string | null, warnings: WarningCollector): PitchStep {
@@ -665,6 +672,26 @@ function parseNote(
     Only on notes: the model carries a fermata on a `NoteEvent`, so one written
     over a rest is dropped rather than misfiled onto the following note.
   */
+  /*
+    The file's beaming, read from the primary (eighth-note) beam only.
+
+    Secondary beams — `number="2"` on a 16th and so on — say how many flags
+    the beam carries, which follows from `<type>` and is not something this
+    model stores separately. `forward hook`/`backward hook` are partial beams
+    within a group and are treated as membership, since that is what they are.
+  */
+  const beamText = directChildren(noteEl, 'beam')
+    .find(el => (el.getAttribute('number') ?? '1') === '1')
+    ?.textContent?.trim();
+  const xmlBeam: RawEvent['xmlBeam'] =
+    beamText === 'begin'
+      ? 'begin'
+      : beamText === 'end'
+        ? 'end'
+        : beamText
+          ? 'continue'
+          : undefined;
+
   const arpeggiate =
     !restEl &&
     notationsEl !== null &&
@@ -712,6 +739,7 @@ function parseNote(
     ...(glissandoStop ? { glissandoStop: true } : {}),
     ...(fingering ? { fingering } : {}),
     ...(ornament ? { ornament } : {}),
+    ...(xmlBeam ? { xmlBeam } : {}),
   };
   return { raw, cursorAdvance: durationTicks };
 }
@@ -729,14 +757,126 @@ function parseNote(
  * already-measure-scoped XML content rather than a continuous cross-measure
  * timeline.
  */
+/**
+ * Stores the file's beaming as a *difference* from our own derivation.
+ *
+ * The model keeps only where the engraver disagrees with the default, so
+ * importing every `<beam>` verbatim would fill a score with overrides that say
+ * nothing — and would then have to be re-derived anyway the moment a note was
+ * retimed. `beamGroups` is asked what it would do unaided, and only the two
+ * expressible disagreements are recorded.
+ *
+ * **Known gap, the same one the model documents:** a file that beams *across*
+ * a beat cannot be represented, because `break` and `none` can only split and
+ * remove. Such a passage imports with our default grouping rather than the
+ * file's. Beaming it correctly would need a `join`, which would mean owning
+ * a second grouping rule rather than deriving one.
+ */
+function applyImportedBeams(
+  events: MusicalEvent[],
+  xmlBeams: Map<number, 'begin' | 'continue' | 'end'>,
+  measureStartTick: number,
+  timeSignature: TimeSignature
+): void {
+  // No `<beam>` anywhere in the voice means the file said nothing about
+  // beaming — a very common case, and *not* an instruction to unbeam the bar.
+  if (xmlBeams.size === 0) return;
+
+  /*
+    Reconciled as a fixpoint rather than in one pass, because the overrides
+    interact.
+
+    A `break` leaves the note before it alone, and a note left alone is drawn
+    with a flag — so the file writes no `<beam>` on it. Read naively that looks
+    like "deliberately unbeamed", and storing `none` there then *stops the
+    break taking effect*, because a break whose preceding run is empty is a
+    no-op. The round trip came back with the whole bar regrouped. So instead:
+    derive with what has been decided so far, fix the first thing that still
+    disagrees, and derive again.
+
+    Bounded by the number of events — each pass fixes one note and never
+    revisits it — so this terminates even on a file whose beaming we cannot
+    express.
+  */
+  const notes = events.filter(isNoteEvent).length;
+  const unfixable = new Set<number>();
+
+  for (let pass = 0; pass <= notes; pass += 1) {
+    const derived = beamGroups(
+      events,
+      measureStartTick,
+      timeSignature,
+      SCORE_PPQ
+    );
+    const startsGroup = new Set(derived.map(g => g.indices[0]));
+    const inGroup = new Set(derived.flatMap(g => g.indices));
+
+    /*
+      Breaks first, everywhere, before any `none`.
+
+      A break is what *causes* its neighbour to be left unbeamed, so resolving
+      the two in index order reads that neighbour's missing `<beam>` as a
+      deliberate flag and stores a `none` that then cancels the break. Fixing
+      every break the pass can see first means the next derivation already
+      accounts for them, and most apparent `none`s simply stop being
+      disagreements.
+    */
+    let fixed = false;
+    for (let index = 0; index < events.length; index += 1) {
+      const event = events[index];
+      if (!isNoteEvent(event) || unfixable.has(index)) continue;
+      const marking = xmlBeams.get(index);
+      if (
+        marking === 'begin' &&
+        inGroup.has(index) &&
+        !startsGroup.has(index)
+      ) {
+        (event as NoteEvent).beam = 'break';
+        unfixable.add(index);
+        fixed = true;
+        break;
+      }
+      if (marking && !inGroup.has(index)) {
+        /*
+          The file beams a note we would not beam at all — beaming *across* a
+          beat, which `break` and `none` cannot express: they only split and
+          remove. Recorded as unfixable so the loop moves on rather than
+          spinning, and the passage imports with our grouping rather than the
+          file's. Closing this gap needs a `join`, which would mean owning a
+          second grouping rule instead of deriving one.
+        */
+        unfixable.add(index);
+      }
+    }
+    if (fixed) continue;
+
+    for (let index = 0; index < events.length; index += 1) {
+      const event = events[index];
+      if (!isNoteEvent(event) || unfixable.has(index)) continue;
+      if (!xmlBeams.get(index) && inGroup.has(index)) {
+        // The file draws a flag here where we would beam, and no break
+        // accounts for it — so it is a deliberate one.
+        (event as NoteEvent).beam = 'none';
+        unfixable.add(index);
+        fixed = true;
+        break;
+      }
+    }
+    if (!fixed) break;
+  }
+}
+
 function fillAndClip(
   raw: RawEvent[],
   durationTicks: number,
   measureStartTick: number,
   trackId: string,
   voiceId: string,
-  warnings: WarningCollector
+  warnings: WarningCollector,
+  timeSignature: TimeSignature
 ): MusicalEvent[] {
+  /** Where each `<beam>`-carrying note landed in `events`. */
+  const xmlBeams = new Map<number, 'begin' | 'continue' | 'end'>();
   const sorted = [...raw].sort((a, b) => a.startTick - b.startTick);
   const events: MusicalEvent[] = [];
   let cursor = 0;
@@ -786,6 +926,7 @@ function fillAndClip(
         ...(item.graceNotes?.length ? { graceNotes: item.graceNotes } : {}),
         ...(item.chordSymbol ? { chordSymbol: item.chordSymbol } : {}),
       };
+      if (item.xmlBeam) xmlBeams.set(events.length, item.xmlBeam);
       events.push(note);
     } else {
       const rest: RestEvent = {
@@ -809,6 +950,11 @@ function fillAndClip(
       trackId,
     });
   }
+
+  // After the bar is complete, so the derivation sees the same events the
+  // renderer will — including the rests filled in above, which interrupt a
+  // beam and therefore change what the default grouping would have been.
+  applyImportedBeams(events, xmlBeams, measureStartTick, timeSignature);
 
   return events;
 }
@@ -1164,7 +1310,8 @@ function parseMeasure(
         startTick,
         trackId,
         voiceId,
-        warnings
+        warnings,
+        state.timeSignature
       ),
     };
   });
