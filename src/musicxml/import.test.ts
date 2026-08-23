@@ -1,4 +1,4 @@
-import { testXmlParser } from '../test/platform.js';
+import { testXmlParser } from '../test/xml.js';
 import { describe, expect, it } from 'vitest';
 import { TEST_MUSICXML_WARNINGS } from '../test/musicxml-warnings.js';
 import { importMusicXml } from './import.js';

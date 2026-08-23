@@ -11,7 +11,6 @@
  * notation").
  */
 import type {
-  MidiCodec,
   MidiFile,
   MidiTrackData as SourceMidiTrack,
 } from '@sudobility/music_types';
@@ -33,6 +32,7 @@ import type { QuantizeOptions } from '@sudobility/music_types';
 import { quantizeEvents } from '@sudobility/music_types';
 import { ticksFor } from '@sudobility/music_types';
 import { allocateVoices } from '@sudobility/music_types';
+import { decodeMidi } from './decode.js';
 
 /** The score model's fixed internal PPQ (spec §4/§15: every import is normalized to 480). */
 const SCORE_PPQ = 480;
@@ -618,11 +618,10 @@ export function importMidiFile(
   return { score, warnings };
 }
 
-/** Decodes `data` and imports it. The codec is the only platform-bound part. */
+/** Decodes `data` and imports it. */
 export function importMidi(
   data: ArrayBuffer,
-  options: MidiImportOptions,
-  codec: MidiCodec
+  options: MidiImportOptions
 ): MidiImportResult {
-  return importMidiFile(codec.decode(data), options);
+  return importMidiFile(decodeMidi(data), options);
 }

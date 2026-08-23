@@ -7,7 +7,6 @@
  * exported at 80. These pin that the file and the transport now agree.
  */
 import { describe, expect, it } from 'vitest';
-import type { MidiFile } from '@sudobility/music_types';
 import { isNoteEvent } from '@sudobility/music_types';
 import { twinkleScore } from '../test/fixtures.js';
 import { allNotes } from '@sudobility/music_types';
@@ -18,30 +17,18 @@ import {
   toggleHairpinCommand,
 } from '@sudobility/music_types';
 import { flattenScoreNotes } from '@sudobility/music_types';
-import { exportMidi } from './export.js';
+import { scoreToMidiFile } from './export.js';
 import type { Score } from '@sudobility/music_types';
 
-/** A codec that captures what it was handed instead of encoding it. */
-function capturingCodec() {
-  let captured: MidiFile | null = null;
-  return {
-    codec: {
-      encode: (file: MidiFile) => {
-        captured = file;
-        return new Uint8Array();
-      },
-      decode: () => {
-        throw new Error('not used');
-      },
-    },
-    written: () => captured!,
-  };
-}
-
+/**
+ * The `MidiFile` the exporter builds, before it is turned into bytes.
+ *
+ * This used to inject a fake `MidiCodec` that captured its argument instead of
+ * encoding. `scoreToMidiFile` is that observation point as a real function, so
+ * the assertions below read the model the exporter actually produces.
+ */
 function exported(score: Score) {
-  const { codec, written } = capturingCodec();
-  exportMidi(score, codec as never);
-  return written();
+  return scoreToMidiFile(score);
 }
 
 function firstIds(score: Score, n: number): string[] {

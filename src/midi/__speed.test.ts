@@ -1,4 +1,3 @@
-import { testMidiCodec } from '../test/platform.js';
 import { describe, expect, it } from 'vitest';
 import { analyzeMidi } from './analyze.js';
 import { importMidi } from './import.js';
@@ -49,10 +48,9 @@ function smf(ppq: number, bpm: number, quarterNotes: number): ArrayBuffer {
 }
 
 async function onsets(ppq: number, bpm: number, n: number): Promise<number[]> {
-  const codec = testMidiCodec();
   const bytes = smf(ppq, bpm, n);
-  const summary = analyzeMidi(bytes, codec);
-  const { score } = importMidi(bytes, defaultMidiImportOptions(summary), codec);
+  const summary = analyzeMidi(bytes);
+  const { score } = importMidi(bytes, defaultMidiImportOptions(summary));
   const map = new TempoMap(score.tempoMap, score.ppq);
   return score.tracks[0].measures
     .flatMap(m => m.voices.flatMap(v => v.events))

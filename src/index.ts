@@ -13,13 +13,18 @@
  * so. Both sides now depend on this, and on `@sudobility/music_types` for the
  * score model and the domain primitives these operate on.
  *
- * Raw byte work — parsing a MIDI file into tracks and notes, or XML into a
- * DOM — belongs to `@sudobility/music_io`, which is injected: these modules
- * take a `MidiCodec` or an `XmlParser` rather than importing one, so they stay
- * free of anything platform-shaped.
+ * Raw byte work lives here too: `decodeMidi`/`encodeMidi` read and write
+ * Standard MIDI Files, and `decodeTracker`/`encodeTracker` do the same for the
+ * module formats. Only XML is still injected — `DOMParser` on the web and
+ * `fast-xml-parser` on React Native are genuinely different implementations,
+ * so `XmlParser` stays a platform capability in `@sudobility/music_io` while
+ * the MusicXML semantics live here.
  */
 
 // ---- MIDI -----------------------------------------------------------------
+export * from './midi/errors.js';
+export { decodeMidi } from './midi/decode.js';
+export { encodeMidi } from './midi/encode.js';
 export * from './midi/analyze.js';
 export * from './midi/export.js';
 export * from './midi/grid-detection.js';
@@ -43,6 +48,12 @@ export {
 } from './musicxml/export.js';
 
 // ---- Tracker modules (MOD, S3M, XM, IT, MPTM) -----------------------------
+/**
+ * Bytes in and out. The individual format readers behind `decodeTracker` are
+ * deliberately not exported: which one runs is decided by magic bytes, and
+ * publishing five readers would make the choice a caller's problem.
+ */
+export { decodeTracker, encodeTracker } from './tracker/dispatch.js';
 export * from './mod/export.js';
 export * from './mod/fill.js';
 export * from './mod/import.js';

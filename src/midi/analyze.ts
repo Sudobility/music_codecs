@@ -3,12 +3,9 @@
  * per-track name/channel/program/note-count/duration, tempo events, and
  * time signatures, without importing anything into the score model yet.
  */
-import type {
-  MidiCodec,
-  MidiFile,
-  MidiTrackData,
-} from '@sudobility/music_types';
+import type { MidiFile, MidiTrackData } from '@sudobility/music_types';
 import { detectGrid, type DetectedGrid } from './grid-detection.js';
+import { decodeMidi } from './decode.js';
 
 export type MidiTrackSummary = {
   index: number;
@@ -108,7 +105,7 @@ export function analyzeMidiFile(midi: MidiFile): MidiSummary {
   };
 }
 
-/** Decodes `data` and summarizes it. The codec is the only platform-bound part. */
-export function analyzeMidi(data: ArrayBuffer, codec: MidiCodec): MidiSummary {
-  return analyzeMidiFile(codec.decode(data));
+/** Decodes `data` and summarizes it. */
+export function analyzeMidi(data: ArrayBuffer): MidiSummary {
+  return analyzeMidiFile(decodeMidi(data));
 }

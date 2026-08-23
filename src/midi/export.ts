@@ -7,13 +7,13 @@
 import { fermataTempoMap } from '@sudobility/music_types';
 import { flattenScoreNotes } from '@sudobility/music_types';
 import type {
-  MidiCodec,
   MidiFile,
   MidiTimeSignatureEvent,
   MidiTrackData,
   Score,
   TimeSignature,
 } from '@sudobility/music_types';
+import { encodeMidi } from './encode.js';
 
 /** General MIDI channel 10 (0-indexed 9), the standard percussion channel. */
 const PERCUSSION_CHANNEL = 9;
@@ -82,8 +82,15 @@ function collectTimeSignatureChanges(score: Score): MidiTimeSignatureEvent[] {
  * The tempo map is `fermataTempoMap` for the same reason: a pause is a local
  * slowing, so a file written from the plain map runs straight through every
  * hold. What the file plays is now what the transport just played.
+ *
+ * Split from `exportMidi` so the model can be inspected without going through
+ * bytes, which is the same seam `importMidiFile` and `analyzeMidiFile` give
+ * the other direction. Before the codec moved into this package, a test that
+ * wanted the `MidiFile` had to inject a fake `MidiCodec` that captured its
+ * argument instead of encoding — a seam that existed for the platform split
+ * and got borrowed for observation.
  */
-export function exportMidi(score: Score, codec: MidiCodec): Uint8Array {
+export function scoreToMidiFile(score: Score): MidiFile {
   // One traversal for the whole file, then split per track: `flattenScoreNotes`
   // resolves ties, dynamics, hairpins, articulations and grace notes together,
   // and re-running it per track would repeat that work for every part.
@@ -124,7 +131,12 @@ export function exportMidi(score: Score, codec: MidiCodec): Uint8Array {
     duration: 0,
   };
 
-  return codec.encode(file);
+  return file;
+}
+
+/** Writes `score` out as a Standard MIDI File. */
+export function exportMidi(score: Score): Uint8Array {
+  return encodeMidi(scoreToMidiFile(score));
 }
 
 /**

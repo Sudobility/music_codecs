@@ -1,0 +1,125 @@
+# music_codecs
+
+> **Git policy — never auto-commit or auto-push.** Leave your work in the working tree.
+> Run `git commit`, `git push` or `npm publish` **only when the user explicitly asks in
+> that turn**. Approval for an earlier change does not carry forward, and finishing a
+> task is not permission to commit it.
+
+Every score file format Moosiac reads or writes: MIDI, MusicXML and the tracker
+modules. One of six repos in the family — see `music_app/docs/architecture.md`.
+
+**The rule: a format that carries notes lives here; a format that carries
+samples lives in `@sudobility/music_io`.** Reading a MIDI file or a tracker
+module is byte arithmetic against a published spec — no `AudioContext`, no DOM,
+no filesystem — so it runs identically on the frontend, on React Native and on
+the server. Reading a WAV or an MP3 needs a real audio context, which makes it a
+platform capability.
+
+That rule is why this package exists at all. `music_api` (backend) and
+`music_lib` (frontend) both decode MIDI and neither may depend on the other.
+
+## Package boundaries
+
+`src/__architecture.test.ts` enforces three things rather than trusting them to
+be remembered:
+
+1. **No import of `music_lib`, `music_io`, `vexflow` or `tone`** in shipped
+   source. One would put this package out of the server's reach silently, until
+   somebody tried to deploy.
+2. **`dependencies` is empty and `peerDependencies` is exactly
+   `@sudobility/music_types`.** Everything here is written against the model and
+   the standard library.
+3. **`@tonejs/midi` is a devDependency and appears in no shipped source.** See
+   below — it is a test oracle, not an implementation.
+
+Target is **ES2020**, because the server consumes this package: no `.at()`, no
+`??=`, no `Object.hasOwn`. `replacement-region.ts` uses `measures[length - 1]`
+rather than `.at(-1)` for exactly that reason.
+
+## Structure
+
+- `src/midi/` — `bytes.ts` (SMF primitives: big-endian ints, variable-length
+  quantities), `decode.ts`, `encode.ts`, `errors.ts`; then the musical half —
+  `import.ts`, `export.ts`, `analyze.ts`, `measures.ts`, `grid-detection.ts`,
+  `key-detection.ts`, `import-options.ts`
+- `src/tracker/` — the byte readers: `read.ts` (MOD), `period.ts`, `dsm.ts`,
+  `s3m.ts`, `xm.ts`, `xm-write.ts`, `it.ts`, `riff.ts`, the two effect
+  normalisers, `dispatch.ts`, the fixture builders, and `fixtures/` — eight real
+  modules the acceptance suite reads off disk
+- `src/mod/` — the musical half of tracker support: `import.ts`
+  (`trackerToScore`), `export.ts` (`scoreToTracker`), `fill.ts`, `limits.ts`,
+  `timing.ts`
+- `src/musicxml/` — `import.ts`, `export.ts`, `duration-map.ts`
+- `src/fixtures.ts` — the test-facing entry (`./fixtures`), which publishes the
+  module builders and nothing else
+- `src/test/` — `fixtures.ts` (score fixtures) and `xml.ts` (a jsdom
+  `XmlParser`). Scaffolding: not shipped, excluded from the build
+
+## Gotchas
+
+- **The MIDI byte codec is hand-written, and `@tonejs/midi` is its oracle.**
+  There is not one `.mid` fixture file anywhere in the family, so every
+  byte-crossing MIDI test round-trips through the codec under test — a codec
+  that is internally consistent but spec-wrong would pass all of them silently.
+  `src/midi/oracle.test.ts` closes that: bytes we write must decode correctly
+  through `@tonejs/midi`, and bytes it writes must decode correctly through
+  ours. It stays a devDependency, so this package still installs with no runtime
+  dependency at all. **If the oracle disagrees with us, we are wrong** — it has
+  years of real files behind it.
+- **Format 0 splits by channel, and that is a deliberate departure.**
+  `@tonejs/midi` splits a format-0 file on program-change boundaries instead: on
+  a two-channel file it returns *three* tracks — a phantom one reporting the
+  wrong channel that holds the second channel's tick-0 CC7/CC10, and that
+  channel's real notes stranded with no controllers. A 25-line
+  `withFormatZeroSetupControls` workaround existed in four separate copies to
+  patch it up after the fact. Splitting by the channel each event actually names
+  needs no patching, and `src/midi/format-zero.test.ts` pins it.
+- **A note-on at velocity 0 is a note-off.** Writers emit it constantly instead
+  of a real note-off; taken literally the note sounds for the rest of the piece.
+- **Running status is not optional.** A byte below `0x80` where a status is
+  expected reuses the previous channel status and is itself the first data byte;
+  `0xFF`/`0xF0`/`0xF7` clear it. A reader that ignores this misparses most real
+  files from the first repeated event onward.
+- **In the neutral model, velocity and control-change values are normalized
+  0–1**, not 0–127. `MidiTempoEvent.bpm` is a float, and SMF stores tempo as
+  integer microseconds per quarter — so 90 bpm round-trips as 90.00009. That is
+  the format's limit, not a rounding choice, and tests assert with tolerance
+  rather than pretending otherwise.
+- **A conductor chunk is recognised by having no channel events at all**, which
+  is stricter than `@tonejs/midi`'s "its duration is 0" and does not misfire on
+  a real track that carries only controllers. `encodeMidi` writes format 1 with
+  a conductor chunk first, so the two agree by construction.
+- **`scoreToMidiFile` is split out of `exportMidi` on purpose.** It is the
+  observation point `importMidiFile` and `analyzeMidiFile` already gave the
+  other direction. Before the codec moved into this package, a test that wanted
+  the `MidiFile` had to inject a fake `MidiCodec` that captured its argument
+  instead of encoding — borrowing a platform seam to observe a value.
+- **The individual tracker readers are not exported.** Which one runs is decided
+  by magic bytes in `decodeTracker`, never by file extension, so a mis-named
+  module still imports and an unrecognised file fails naming what was actually
+  at the front of it. Publishing five readers would make that choice a caller's
+  problem.
+- **`src/tracker/acceptance.test.ts` declares `@vitest-environment node`.** This
+  package's vitest default is jsdom (two MusicXML suites want `DOMParser`), and
+  under jsdom `import.meta.url` is an `http://` URL whose `pathname` resolves
+  `./fixtures/` to `/src/tracker/fixtures` — the filesystem root.
+- **The DSM reader's offsets were measured against a real file, not read from a specification — and two of them contradict the usual documentation.** `numOrders` sits at `SONG+36`, where `+34` is `restartPos` and yields 127 instead of 31; the `INST` name sits at `+36` of a 64-byte header. Both were pinned by arithmetic that has to close: the order list's maximum equals `numPatterns - 1`, and `64 + length` equals the chunk length for every instrument. A real module lives in `src/tracker/fixtures/` so those offsets stay honest. **`NOTE_BASE` is the one value still unconfirmed** — the file carries no reference pitch and no note-off, so it fixes note *spacing* but not the absolute octave. It currently produces E3-B5 for that module, which is plausible but not proof; an octave error would move every note together and pass every test here.
+- **DSM shares ProTracker's effect lettering**, which is why `protracker-effects.ts` is shared with the MOD reader rather than written twice. Verified on the real file: effect `0x0F` with parameters 5 and 114, splitting at `0x20` exactly as MOD does. S3M, XM and IT letter theirs differently and will bring their own normalisers.
+- **S3M is parapointer-addressed, so nothing is read by walking forward.** The header carries tables of 16-bit pointers which, times sixteen, give file offsets for each instrument and pattern. It has **its own effect normaliser** (`s3m-effects.ts`) because commands are numbered 1=A..26=Z rather than nibbled: `A` sets speed, `T` sets tempo, `C` breaks the pattern, and there is none of MOD's `0x20` split to make.
+- **Two S3M behaviours contradict the format documentation, and both have a real file in `fixtures/` that exhibits them.** `portal_to_hell.s3m` (54606) yields 62-63 rows for *every* pattern and most run one byte past their declared length, because the writer omits trailing empty rows and sometimes the final terminator — so the reader never trusts the declared length to terminate and never requires 64 rows of data. `moving_that_rhythm.s3m` (69391) enables 16 channels in its header while its patterns reach only 0-8 — so the row width is `max(enabled, highestUsed + 1)`, erring wide because empty columns are harmless (tracks come from instruments) and erring narrow loses notes. Do not "simplify" either rule back out; a decoder written from the specification rejects the first file outright.
+- **In XM almost nothing has a fixed size, and the instrument header is the one that catches people.** The file header, every pattern header and every instrument header declare their own length. An instrument with *no samples* writes 33 bytes where one with samples writes 263, and real modules mix them freely — `sunlight.xm` has eight empty among fifteen — so assuming 263 desynchronises everything after the first. Finding the next instrument needs all three of the header size, the sample-header size and the sum of every sample's length. Patterns come *before* instruments, so the instruments can only be found by walking every pattern first.
+- **XM patterns carry their own row count, and `packedSize = 0` means blank rows rather than none.** `dr_wily.xm` holds a 76-row pattern among its 64s and four empty patterns; `mercury.xm` holds 32s and 56s. XM is the first format here that is not fixed at 64, which makes it the first real test of that axis of `TrackerModule` — and it needed no change. Emitting nothing for an empty pattern would shorten the song and shift everything after it.
+- **XM reuses `applyProTrackerEffect`,** unlike S3M. Verified across four real modules: effect `F` carried parameters 1-24 and 125, splitting at `0x20` exactly as MOD does, and `D` is a pattern break. **Not verified:** XM's per-sample relative-note and finetune are ignored, so a module using them imports transposed — the same class of limitation as MOD's finetune.
+- **`periodToMidi` lives here, beside the MOD reader, and that is deliberate.** It is a musical conversion, which would normally put it in music_lib — but MOD is the only tracker format that stores Amiga periods; every other one stores note numbers directly. Converting at the decoder is what lets the neutral `TrackerCell` carry a plain note number and keeps "periods are a ProTracker detail" true. Its finetune approximation is documented in that file.
+
+## Related Projects
+
+- `music_types` — the model, its schemas and the pure primitives (`@sudobility/music_types`)
+- `music_io` — platform capabilities: playback, audio codecs, file export, MIDI input
+- `music_lib` — commands, store, rendering adapters; re-exports this package wholesale
+- `music_api` — backend; depends on this package directly
+- `music_app` — the web UI
+
+## Git Workflow
+
+- Do not use feature branches for code changes. Always stay on the current branch.

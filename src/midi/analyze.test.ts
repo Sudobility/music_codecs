@@ -1,4 +1,3 @@
-import { testMidiCodec } from '../test/platform.js';
 import { describe, expect, it } from 'vitest';
 import { analyzeMidi } from './analyze.js';
 import { exportMidi } from './export.js';
@@ -9,7 +8,6 @@ import * as midiLib from '@tonejs/midi';
 
 // The real codec, via the mocks entry: MIDI encoding is pure byte manipulation,
 // and the mocks entry -- unlike music_io/web -- does not import music_lib.
-const codec = testMidiCodec();
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   return bytes.buffer as ArrayBuffer;
@@ -18,7 +16,7 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
 describe('analyzeMidi', () => {
   it('summarizes PPQ, duration, tempo events, and time signatures', () => {
     const score = chordScore();
-    const summary = analyzeMidi(toArrayBuffer(exportMidi(score, codec)), codec);
+    const summary = analyzeMidi(toArrayBuffer(exportMidi(score)));
 
     expect(summary.ppq).toBe(score.ppq);
     // Standard MIDI encodes tempo as integer microseconds-per-quarter-note,
@@ -34,7 +32,7 @@ describe('analyzeMidi', () => {
 
   it('summarizes one entry per track with name/channel/program/note count', () => {
     const score = twoTrackScore();
-    const summary = analyzeMidi(toArrayBuffer(exportMidi(score, codec)), codec);
+    const summary = analyzeMidi(toArrayBuffer(exportMidi(score)));
 
     expect(summary.tracks).toHaveLength(2);
     const [treble, bass] = summary.tracks;
@@ -81,7 +79,7 @@ describe('analyzeMidi', () => {
       },
     ];
 
-    const summary = analyzeMidi(toArrayBuffer(exportMidi(score, codec)), codec);
+    const summary = analyzeMidi(toArrayBuffer(exportMidi(score)));
     const drums = summary.tracks.find(t => t.name === 'Drums');
     const empty = summary.tracks.find(t => t.name === 'Empty');
 
@@ -118,14 +116,14 @@ describe('analyzeMidi: detected quantization grid', () => {
 
   it('reports the triplet grid for a file written in triplets', () => {
     const onsets = [0, 1 / 3, 2 / 3, 1, 4 / 3, 5 / 3, 2, 7 / 3, 8 / 3];
-    const summary = analyzeMidi(fileWith(onsets, 1 / 3), codec);
+    const summary = analyzeMidi(fileWith(onsets, 1 / 3));
     expect(summary.detectedGrid).toEqual({ grid: 'eighth', triplet: true });
   });
 
   it('takes note ends into account, not just onsets', () => {
     // Staccato quarters: quarter onsets, eighth-note ends. Reporting "quarter"
     // would stretch every note to fill its beat.
-    const summary = analyzeMidi(fileWith([0, 1, 2, 3, 4, 5, 6, 7], 0.5), codec);
+    const summary = analyzeMidi(fileWith([0, 1, 2, 3, 4, 5, 6, 7], 0.5));
     expect(summary.detectedGrid).toEqual({ grid: 'eighth', triplet: false });
   });
 });
@@ -152,7 +150,7 @@ describe('analyzeMidi: percussion counts toward the grid', () => {
         durationTicks: 10,
       });
 
-    const summary = analyzeMidi(midi.toArray().buffer as ArrayBuffer, codec);
+    const summary = analyzeMidi(midi.toArray().buffer as ArrayBuffer);
     expect(summary.detectedGrid).toEqual({
       grid: 'thirtysecond',
       triplet: false,

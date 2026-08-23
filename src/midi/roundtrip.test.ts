@@ -4,7 +4,6 @@
  * exactly equal for these already-sixteenth-note-aligned fixtures, and
  * tempo/time signatures must be preserved.
  */
-import { testMidiCodec } from '../test/platform.js';
 import { describe, expect, it } from 'vitest';
 import { exportMidi } from './export.js';
 import { importMidi } from './import.js';
@@ -23,7 +22,6 @@ import {
 
 // The real codec, via the mocks entry: MIDI encoding is pure byte manipulation,
 // and the mocks entry -- unlike music_io/web -- does not import music_lib.
-const codec = testMidiCodec();
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   return bytes.buffer as ArrayBuffer;
@@ -31,14 +29,14 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
 
 /** Exports `source`, then re-imports it quantized to the nearest sixteenth note. */
 function roundTrip(source: Score): { imported: Score; warnings: string[] } {
-  const buffer = toArrayBuffer(exportMidi(source, codec));
-  const summary = analyzeMidi(buffer, codec);
+  const buffer = toArrayBuffer(exportMidi(source));
+  const summary = analyzeMidi(buffer);
   const options = {
     ...defaultMidiImportOptions(summary),
     quantizeGrid: 'sixteenth' as const,
     detectKey: false,
   };
-  const { score, warnings } = importMidi(buffer, options, codec);
+  const { score, warnings } = importMidi(buffer, options);
   return { imported: score, warnings };
 }
 

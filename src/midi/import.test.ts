@@ -1,4 +1,3 @@
-import { testMidiCodec } from '../test/platform.js';
 import { Midi } from '@tonejs/midi';
 import { describe, expect, it } from 'vitest';
 import { exportMidi } from './export.js';
@@ -13,7 +12,6 @@ import { chordScore, twinkleScore, twoTrackScore } from '../test/fixtures.js';
 
 // The real codec, via the mocks entry: MIDI encoding is pure byte manipulation,
 // and the mocks entry -- unlike music_io/web -- does not import music_lib.
-const codec = testMidiCodec();
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   return bytes.buffer as ArrayBuffer;
@@ -24,11 +22,11 @@ function importFixture(
   optionsOverride: Partial<ReturnType<typeof defaultMidiImportOptions>> = {}
 ) {
   const score = scoreFactory();
-  const bytes = exportMidi(score, codec);
+  const bytes = exportMidi(score);
   const buffer = toArrayBuffer(bytes);
-  const summary = analyzeMidi(buffer, codec);
+  const summary = analyzeMidi(buffer);
   const options = { ...defaultMidiImportOptions(summary), ...optionsOverride };
-  return { source: score, ...importMidi(buffer, options, codec) };
+  return { source: score, ...importMidi(buffer, options) };
 }
 
 describe('importMidi', () => {
@@ -57,13 +55,13 @@ describe('importMidi', () => {
 
   it('excludes tracks whose trackSelections.include is false', () => {
     const score = twoTrackScore();
-    const bytes = exportMidi(score, codec);
+    const bytes = exportMidi(score);
     const buffer = toArrayBuffer(bytes);
-    const summary = analyzeMidi(buffer, codec);
+    const summary = analyzeMidi(buffer);
     const options = defaultMidiImportOptions(summary);
     options.trackSelections[1].include = false;
 
-    const { score: imported } = importMidi(buffer, options, codec);
+    const { score: imported } = importMidi(buffer, options);
     expect(imported.tracks).toHaveLength(1);
     expect(imported.tracks[0].name).toBe('Treble');
   });
@@ -103,13 +101,13 @@ describe('importMidi', () => {
 
   it('routes a percussion-selected track to channel 9 and clef "percussion"', () => {
     const score = twinkleScore();
-    const bytes = exportMidi(score, codec);
+    const bytes = exportMidi(score);
     const buffer = toArrayBuffer(bytes);
-    const summary = analyzeMidi(buffer, codec);
+    const summary = analyzeMidi(buffer);
     const options = defaultMidiImportOptions(summary);
     options.trackSelections[0].clef = 'percussion';
 
-    const { score: imported } = importMidi(buffer, options, codec);
+    const { score: imported } = importMidi(buffer, options);
     expect(imported.tracks[0].clef).toBe('percussion');
     expect(imported.tracks[0].midiChannel).toBe(9);
   });
@@ -144,12 +142,12 @@ describe('importMidi', () => {
     track.addNote({ midi: 62, ticks: 480, durationTicks: 480, velocity: 0.8 });
 
     const buffer = toArrayBuffer(midi.toArray());
-    const summary = analyzeMidi(buffer, codec);
+    const summary = analyzeMidi(buffer);
     const options = {
       ...defaultMidiImportOptions(summary),
       minDurationTicks: 30,
     };
-    const { score, warnings } = importMidi(buffer, options, codec);
+    const { score, warnings } = importMidi(buffer, options);
 
     expect(allNotes(score).filter(isNoteEvent)).toHaveLength(1);
     expect(
@@ -183,14 +181,14 @@ describe('importMidi', () => {
     track.addNote({ midi: 62, ticks: 960, durationTicks: 480, velocity: 0.8 });
 
     const buffer = toArrayBuffer(midi.toArray());
-    const summary = analyzeMidi(buffer, codec);
+    const summary = analyzeMidi(buffer);
     const options = {
       ...defaultMidiImportOptions(summary),
       quantizeGrid: null,
       mergeNearDuplicates: true,
       minDurationTicks: 1,
     };
-    const { score, warnings } = importMidi(buffer, options, codec);
+    const { score, warnings } = importMidi(buffer, options);
 
     const notes = allNotes(score)
       .filter(isNoteEvent)
@@ -227,12 +225,12 @@ describe('importMidi', () => {
     track.addNote({ midi: 62, ticks: 480, durationTicks: 480, velocity: 0.8 });
 
     const buffer = toArrayBuffer(midi.toArray());
-    const summary = analyzeMidi(buffer, codec);
+    const summary = analyzeMidi(buffer);
     const options = {
       ...defaultMidiImportOptions(summary),
       quantizeGrid: null,
     };
-    const { score, warnings } = importMidi(buffer, options, codec);
+    const { score, warnings } = importMidi(buffer, options);
 
     const notes = allNotes(score)
       .filter(isNoteEvent)
@@ -262,13 +260,13 @@ describe('importMidi', () => {
     track.addNote({ midi: 60, ticks: 480, durationTicks: 480, velocity: 0.8 });
 
     const buffer = toArrayBuffer(midi.toArray());
-    const summary = analyzeMidi(buffer, codec);
+    const summary = analyzeMidi(buffer);
     const options = {
       ...defaultMidiImportOptions(summary),
       quantizeGrid: null,
       minDurationTicks: 1,
     };
-    const { score, warnings } = importMidi(buffer, options, codec);
+    const { score, warnings } = importMidi(buffer, options);
 
     const notes = allNotes(score)
       .filter(isNoteEvent)
@@ -306,13 +304,13 @@ describe('importMidi', () => {
     track.addNote({ midi: 60, ticks: 1930, durationTicks: 480, velocity: 0.8 });
 
     const buffer = toArrayBuffer(midi.toArray());
-    const summary = analyzeMidi(buffer, codec);
+    const summary = analyzeMidi(buffer);
     const options = {
       ...defaultMidiImportOptions(summary),
       quantizeGrid: 'half' as const,
       minDurationTicks: 1,
     };
-    const { score, warnings } = importMidi(buffer, options, codec);
+    const { score, warnings } = importMidi(buffer, options);
 
     const notes = allNotes(score)
       .filter(isNoteEvent)
@@ -352,13 +350,13 @@ describe('importMidi', () => {
     track.addCC({ number: 64, ticks: 960, value: 0 });
 
     const buffer = toArrayBuffer(midi.toArray());
-    const summary = analyzeMidi(buffer, codec);
+    const summary = analyzeMidi(buffer);
     const options = {
       ...defaultMidiImportOptions(summary),
       quantizeGrid: null,
       minDurationTicks: 1,
     };
-    const { score } = importMidi(buffer, options, codec);
+    const { score } = importMidi(buffer, options);
 
     const notes = allNotes(score)
       .filter(isNoteEvent)
@@ -393,12 +391,12 @@ describe('importMidi', () => {
     track.addCC({ number: 64, ticks: 960, value: 0 });
 
     const buffer = toArrayBuffer(midi.toArray());
-    const summary = analyzeMidi(buffer, codec);
+    const summary = analyzeMidi(buffer);
     const options = {
       ...defaultMidiImportOptions(summary),
       quantizeGrid: null,
     };
-    const { score } = importMidi(buffer, options, codec);
+    const { score } = importMidi(buffer, options);
 
     const [note] = allNotes(score);
     expect(note.durationTicks).toBe(960);
@@ -421,13 +419,13 @@ describe('importMidi', () => {
     track.addCC({ number: 64, ticks: 960, value: 0 });
 
     const buffer = toArrayBuffer(midi.toArray());
-    const summary = analyzeMidi(buffer, codec);
+    const summary = analyzeMidi(buffer);
     const options = {
       ...defaultMidiImportOptions(summary),
       quantizeGrid: null,
       sustainPedal: 'ignore' as const,
     };
-    const { score } = importMidi(buffer, options, codec);
+    const { score } = importMidi(buffer, options);
 
     const [note] = allNotes(score);
     expect(note.durationTicks).toBe(480);
@@ -442,15 +440,15 @@ describe('importMidi', () => {
 
   it('warns and produces an empty-track score when no selections are included', () => {
     const score = twinkleScore();
-    const bytes = exportMidi(score, codec);
+    const bytes = exportMidi(score);
     const buffer = toArrayBuffer(bytes);
-    const summary = analyzeMidi(buffer, codec);
+    const summary = analyzeMidi(buffer);
     const options = defaultMidiImportOptions(summary);
     options.trackSelections.forEach(s => {
       s.include = false;
     });
 
-    const { score: imported, warnings } = importMidi(buffer, options, codec);
+    const { score: imported, warnings } = importMidi(buffer, options);
     expect(imported.tracks).toEqual([]);
     expect(warnings.some(w => w.includes('No tracks were selected'))).toBe(
       true

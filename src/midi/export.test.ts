@@ -1,4 +1,3 @@
-import { testMidiCodec } from '../test/platform.js';
 import { Midi } from '@tonejs/midi';
 import { describe, expect, it } from 'vitest';
 import { exportMidi, safeFilename } from './export.js';
@@ -9,12 +8,11 @@ import { chordScore, twinkleScore, twoTrackScore } from '../test/fixtures.js';
 
 // The real codec, via the mocks entry: MIDI encoding is pure byte manipulation,
 // and the mocks entry -- unlike music_io/web -- does not import music_lib.
-const codec = testMidiCodec();
 
 describe('exportMidi', () => {
   it('exports PPQ, tempo, and title as the MIDI header', () => {
     const score = twinkleScore();
-    const bytes = exportMidi(score, codec);
+    const bytes = exportMidi(score);
     expect(bytes.length).toBeGreaterThan(0);
 
     const midi = new Midi(bytes);
@@ -26,7 +24,7 @@ describe('exportMidi', () => {
 
   it('exports one MIDI track per score track, with name/program/channel and every note', () => {
     const score = twoTrackScore();
-    const midi = new Midi(exportMidi(score, codec));
+    const midi = new Midi(exportMidi(score));
 
     expect(midi.tracks).toHaveLength(2);
     const [treble, bass] = midi.tracks;
@@ -76,13 +74,13 @@ describe('exportMidi', () => {
       },
     ];
 
-    const midi = new Midi(exportMidi(score, codec));
+    const midi = new Midi(exportMidi(score));
     expect(midi.tracks[0].channel).toBe(9);
   });
 
   it('exports chord (simultaneous same-duration) notes as distinct simultaneous MIDI notes', () => {
     const score = chordScore();
-    const midi = new Midi(exportMidi(score, codec));
+    const midi = new Midi(exportMidi(score));
     const firstMeasureNotes = midi.tracks[0].notes.filter(n => n.ticks === 0);
     expect(firstMeasureNotes).toHaveLength(3); // C E G
     expect(firstMeasureNotes.map(n => n.midi).sort((a, b) => a - b)).toEqual([
@@ -185,7 +183,7 @@ describe('exportMidi', () => {
       ],
     };
 
-    const midi = new Midi(exportMidi(score, codec));
+    const midi = new Midi(exportMidi(score));
     expect(midi.tracks[0].notes).toHaveLength(1);
     expect(midi.tracks[0].notes[0].ticks).toBe(1440);
     expect(midi.tracks[0].notes[0].durationTicks).toBe(960);
@@ -197,7 +195,7 @@ describe('exportMidi', () => {
       measures: 1,
       tracks: [{ name: 'Piano', volume: 0.5, pan: -1 }],
     });
-    const midi = new Midi(exportMidi(score, codec));
+    const midi = new Midi(exportMidi(score));
     const volumeEvents = midi.tracks[0].controlChanges[7];
     const panEvents = midi.tracks[0].controlChanges[10];
     // MIDI CC values are 7-bit (0-127), so a round trip through encode/decode

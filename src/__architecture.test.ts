@@ -25,9 +25,9 @@ function sourceFiles(): string[] {
     globSync('src/**/*.ts', { cwd: process.cwd() })
       .filter(f => !f.includes('.test.'))
       // `src/test/` is scaffolding, not shipped: `package.json`'s `files` and the
-      // build both leave it out. It is where the real MIDI codec lives for tests
-      // to round-trip through — the one place `@tonejs/midi` is legitimate here,
-      // and the reason this package no longer borrows one from `music_io`.
+      // build both leave it out. It used to hold a hand-copied MIDI codec for
+      // tests to round-trip through; the real one is in `src/midi/` now, so all
+      // that is left there are score fixtures and a jsdom `XmlParser`.
       .filter(f => !f.startsWith('test/') && !f.includes('/test/'))
       .map(f => join(process.cwd(), f))
   );
@@ -48,6 +48,36 @@ describe('package boundaries', () => {
       }
     }
     expect(offenders).toEqual([]);
+  });
+
+  /**
+   * `@tonejs/midi` is the independent implementation the MIDI codec is checked
+   * against, and nothing more. It is a devDependency; the moment it appears in
+   * shipped source, this package stops being installable without it.
+   */
+  it('confines @tonejs/midi to tests', () => {
+    const shipped = globSync('src/**/*.ts', { cwd: process.cwd() })
+      .filter(f => !f.includes('.test.'))
+      .filter(f => !f.startsWith('test/') && !f.includes('/test/'));
+    // Matched as an import, not as a substring: several of these modules
+    // explain in prose how they differ from `@tonejs/midi`, and a comment
+    // naming it is the opposite of a dependency on it.
+    const offenders = shipped.filter(f => {
+      const text = readFileSync(join(process.cwd(), f), 'utf8');
+      return (
+        text.includes("from '@tonejs/midi") ||
+        text.includes('from "@tonejs/midi') ||
+        text.includes("require('@tonejs/midi")
+      );
+    });
+    expect(offenders).toEqual([]);
+
+    const pkg = JSON.parse(
+      readFileSync(join(process.cwd(), 'package.json'), 'utf8')
+    );
+    expect(pkg.devDependencies['@tonejs/midi']).toBeDefined();
+    expect(pkg.dependencies?.['@tonejs/midi']).toBeUndefined();
+    expect(pkg.peerDependencies?.['@tonejs/midi']).toBeUndefined();
   });
 
   it('depends on music_types and nothing else at runtime', () => {
