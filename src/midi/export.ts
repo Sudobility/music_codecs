@@ -6,6 +6,7 @@
  */
 import { fermataTempoMap } from '@sudobility/music_types';
 import { flattenScoreNotes } from '@sudobility/music_types';
+import { CC_PAN, CC_VOLUME, PERCUSSION_CHANNEL } from '@sudobility/music_types';
 import type {
   MidiFile,
   MidiTimeSignatureEvent,
@@ -15,10 +16,6 @@ import type {
 } from '@sudobility/music_types';
 import { encodeMidi } from './encode.js';
 
-/** General MIDI channel 10 (0-indexed 9), the standard percussion channel. */
-const PERCUSSION_CHANNEL = 9;
-const CC_VOLUME = 7;
-const CC_PAN = 10;
 const MIDI_VELOCITY_MAX = 127;
 
 function clamp01(v: number): number {

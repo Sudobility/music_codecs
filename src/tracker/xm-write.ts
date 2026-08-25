@@ -15,6 +15,7 @@
  * mask form is smaller for the sparse patterns a score produces.
  */
 import type { TrackerCell, TrackerModule } from '@sudobility/music_types';
+import { TRACKER_DEFAULT_SPEED, TRACKER_DEFAULT_TEMPO } from '../mod/timing.js';
 
 const SIGNATURE = 'Extended Module: ';
 const HEADER_SIZE = 276;
@@ -24,9 +25,6 @@ const PATTERN_HEADER_SIZE = 9;
 /** Note 1 is C-0, so the byte is MIDI minus eleven. 97 is a key off. */
 const NOTE_BASE = 11;
 const KEY_OFF = 97;
-
-const DEFAULT_SPEED = 6;
-const DEFAULT_BPM = 125;
 
 /** `F` carries both knobs, split at 0x20: below is speed, at or above is BPM. */
 const EFFECT_F = 0x0f;
@@ -123,8 +121,9 @@ export function encodeXm(module: TrackerModule): ArrayBuffer {
   // the starting tempo from.
   const first = module.patterns[0]?.[0] ?? [];
   const initialSpeed =
-    first.find(c => c?.speed !== undefined)?.speed ?? DEFAULT_SPEED;
-  const initialBpm = first.find(c => c?.bpm !== undefined)?.bpm ?? DEFAULT_BPM;
+    first.find(c => c?.speed !== undefined)?.speed ?? TRACKER_DEFAULT_SPEED;
+  const initialBpm =
+    first.find(c => c?.bpm !== undefined)?.bpm ?? TRACKER_DEFAULT_TEMPO;
 
   const patternBytes = packed.reduce(
     (n, p) => n + PATTERN_HEADER_SIZE + p.length,

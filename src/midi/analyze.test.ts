@@ -3,7 +3,7 @@ import { analyzeMidi } from './analyze.js';
 import { exportMidi } from './export.js';
 import { createEmptyScore } from '@sudobility/music_types';
 import { createId } from '@sudobility/music_types';
-import { chordScore, twoTrackScore } from '../test/fixtures.js';
+import { chordScore, twoTrackScore } from '@sudobility/music_types/test';
 import * as midiLib from '@tonejs/midi';
 
 // The real codec, via the mocks entry: MIDI encoding is pure byte manipulation,

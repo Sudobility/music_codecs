@@ -9,7 +9,11 @@ import { escapeXml, exportMusicXml, safeFilename } from './export.js';
 import { createId } from '@sudobility/music_types';
 import type { Measure, NoteEvent, Score, Track } from '@sudobility/music_types';
 import { measureDurationTicks, ticksFor } from '@sudobility/music_types';
-import { chordScore, twinkleScore, twoTrackScore } from '../test/fixtures.js';
+import {
+  chordScore,
+  twinkleScore,
+  twoTrackScore,
+} from '@sudobility/music_types/test';
 
 function parse(xml: string): Document {
   const doc = new DOMParser().parseFromString(xml, 'application/xml');

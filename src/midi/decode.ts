@@ -1,4 +1,5 @@
 import { gmInstrument } from '@sudobility/music_types';
+import { DEFAULT_BPM } from '@sudobility/music_types';
 import type {
   MidiControlChange,
   MidiFile,
@@ -16,7 +17,6 @@ const META_TEMPO = 0x51;
 const META_TIME_SIGNATURE = 0x58;
 
 const MICROSECONDS_PER_MINUTE = 60_000_000;
-const DEFAULT_BPM = 120;
 const MAX_7_BIT = 127;
 
 type ChannelEvent =

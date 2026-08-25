@@ -42,15 +42,17 @@ import type {
   Track,
 } from '@sudobility/music_types';
 import { measureDurationTicks } from '@sudobility/music_types';
+import {
+  DEFAULT_KEY_SIGNATURE,
+  DEFAULT_TIME_SIGNATURE,
+  DEFAULT_VELOCITY,
+  MAX_BPM,
+  MIN_BPM,
+} from '@sudobility/music_types';
 import { ticksForNotatedType, isMusicXmlNoteType } from './duration-map.js';
 
 /** The score model's fixed internal PPQ (spec §4/§17: every import is normalized to 480). */
 const SCORE_PPQ = 480;
-const DEFAULT_VELOCITY = 80;
-const MIN_BPM = 20;
-const MAX_BPM = 400;
-const DEFAULT_TIME_SIGNATURE: TimeSignature = { numerator: 4, denominator: 4 };
-const DEFAULT_KEY_SIGNATURE: KeySignature = { fifths: 0, mode: 'major' };
 const DEFAULT_TEMPO_BPM = 120;
 const VALID_STEPS: PitchStep[] = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
 

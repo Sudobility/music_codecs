@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import {
-  assembleTrackMeasures,
-  buildMeasureSpans,
-  DEFAULT_TIME_SIGNATURE,
-} from './measures.js';
+import { assembleTrackMeasures, buildMeasureSpans } from './measures.js';
+import { DEFAULT_TIME_SIGNATURE } from '@sudobility/music_types';
 import { isNoteEvent } from '@sudobility/music_types';
 import type { NoteEvent } from '@sudobility/music_types';
 import { validateScore } from '@sudobility/music_types';

@@ -32,20 +32,22 @@ import type { QuantizeOptions } from '@sudobility/music_types';
 import { quantizeEvents } from '@sudobility/music_types';
 import { ticksFor } from '@sudobility/music_types';
 import { allocateVoices } from '@sudobility/music_types';
+import {
+  DEFAULT_KEY_SIGNATURE,
+  MAX_BPM,
+  MAX_VELOCITY,
+  MIN_BPM,
+  PERCUSSION_CHANNEL,
+} from '@sudobility/music_types';
 import { decodeMidi } from './decode.js';
 
 /** The score model's fixed internal PPQ (spec §4/§15: every import is normalized to 480). */
 const SCORE_PPQ = 480;
 const DEFAULT_TEMPO_BPM = 120;
-const MIN_BPM = 20;
-const MAX_BPM = 400;
-const MAX_VELOCITY = 127;
 const SUSTAIN_CC_NUMBER = 64;
 const SUSTAIN_DOWN_THRESHOLD = 0.5;
 /** Max simultaneous notated voices `allocateVoices` may open per staff. */
 const DEFAULT_MAX_VOICES = 4;
-const DEFAULT_KEY_SIGNATURE: KeySignature = { fifths: 0, mode: 'major' };
-const PERCUSSION_CHANNEL = 9;
 /**
  * Onsets of the same pitch within this many ticks of each other are treated
  * as accidental duplicate triggers (not a deliberate ornament/grace note) by

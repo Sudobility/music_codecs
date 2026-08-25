@@ -16,11 +16,7 @@ import type {
   TimeSignature,
 } from '@sudobility/music_types';
 import { measureDurationTicks } from '@sudobility/music_types';
-
-export const DEFAULT_TIME_SIGNATURE: TimeSignature = {
-  numerator: 4,
-  denominator: 4,
-};
+import { DEFAULT_TIME_SIGNATURE } from '@sudobility/music_types';
 
 export type TimeSignatureChange = {
   tick: number;

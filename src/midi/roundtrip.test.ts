@@ -18,7 +18,7 @@ import {
   stressScore,
   twinkleScore,
   twoTrackScore,
-} from '../test/fixtures.js';
+} from '@sudobility/music_types/test';
 
 // The real codec, via the mocks entry: MIDI encoding is pure byte manipulation,
 // and the mocks entry -- unlike music_io/web -- does not import music_lib.

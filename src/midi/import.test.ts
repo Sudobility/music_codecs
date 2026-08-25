@@ -8,7 +8,11 @@ import { validateScore } from '@sudobility/music_types';
 import { isNoteEvent } from '@sudobility/music_types';
 import { allNotes } from '@sudobility/music_types';
 import { pitchToMidi } from '@sudobility/music_types';
-import { chordScore, twinkleScore, twoTrackScore } from '../test/fixtures.js';
+import {
+  chordScore,
+  twinkleScore,
+  twoTrackScore,
+} from '@sudobility/music_types/test';
 
 // The real codec, via the mocks entry: MIDI encoding is pure byte manipulation,
 // and the mocks entry -- unlike music_io/web -- does not import music_lib.

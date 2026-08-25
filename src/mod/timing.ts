@@ -11,13 +11,19 @@
  * decoder is the only thing that ever sees a period.
  */
 import type { TrackerCell } from './types.js';
+import { MAX_BPM, MIN_BPM } from '@sudobility/music_types';
 
-/** The range a `TempoEvent` may hold; mirrors `domain/validation/validator.ts`. */
-const MIN_BPM = 20;
-const MAX_BPM = 400;
-
-const DEFAULT_SPEED = 6;
-const DEFAULT_TEMPO = 125;
+/**
+ * The two knobs a module boots with when its cells set neither.
+ *
+ * Named for the format rather than for us: 125 here is a tracker *tempo*
+ * value, and the fact that it also comes out as 125 musical BPM at the
+ * default speed is arithmetic, not identity. Three files declared it, two of
+ * them calling it `DEFAULT_BPM`, which is how one of them ended up writing
+ * the format's default where the score's belonged.
+ */
+export const TRACKER_DEFAULT_SPEED = 6;
+export const TRACKER_DEFAULT_TEMPO = 125;
 
 /**
  * Musical BPM from the two knobs.
@@ -28,7 +34,7 @@ const DEFAULT_TEMPO = 125;
  * should be.
  */
 export function effectiveBpm(speed: number, tempo: number): number {
-  if (speed <= 0) return DEFAULT_TEMPO;
+  if (speed <= 0) return TRACKER_DEFAULT_TEMPO;
   // Clamped to what a score can hold. A module is free to set a speed of 1,
   // which at the default tempo works out to 750 BPM — real, and outside the
   // 20-400 the score model accepts, so an unclamped value imports a score the
@@ -42,8 +48,8 @@ export type TempoChange = { row: number; bpm: number };
 
 /** One entry at row 0, then one wherever either knob actually moves. */
 export function tempoChanges(rows: readonly TrackerCell[][]): TempoChange[] {
-  let speed = DEFAULT_SPEED;
-  let tempo = DEFAULT_TEMPO;
+  let speed = TRACKER_DEFAULT_SPEED;
+  let tempo = TRACKER_DEFAULT_TEMPO;
   const changes: TempoChange[] = [{ row: 0, bpm: effectiveBpm(speed, tempo) }];
 
   rows.forEach((cells, row) => {

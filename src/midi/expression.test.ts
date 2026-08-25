@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { isNoteEvent } from '@sudobility/music_types';
-import { twinkleScore } from '../test/fixtures.js';
+import { twinkleScore } from '@sudobility/music_types/test';
 import { allNotes } from '@sudobility/music_types';
 import {
   changeArticulationCommand,

@@ -42,7 +42,11 @@ import { barNumberAt } from '@sudobility/music_types';
 import { repeatPlayOrder } from '@sudobility/music_types';
 import { measureDurationTicks, ticksFor } from '@sudobility/music_types';
 import { validateScore } from '@sudobility/music_types';
-import { chordScore, twinkleScore, twoTrackScore } from '../test/fixtures.js';
+import {
+  chordScore,
+  twinkleScore,
+  twoTrackScore,
+} from '@sudobility/music_types/test';
 
 const parser = testXmlParser();
 

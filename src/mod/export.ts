@@ -22,11 +22,11 @@ import type {
 } from '@sudobility/music_types';
 import { isNoteEvent } from '@sudobility/music_types';
 import { pitchToMidi } from '@sudobility/music_types';
+import { DEFAULT_BPM } from '@sudobility/music_types';
 import { TRACKER_LIMITS, type WritableTrackerFormat } from './limits.js';
 
 const DEFAULT_ROWS_PER_BEAT = 4;
 const ROWS_PER_PATTERN = 64;
-const DEFAULT_BPM = 125;
 
 /** What a tracker's one-byte tempo field will accept. */
 const MIN_TEMPO = 32;
