@@ -67,6 +67,37 @@ export function isCleanFit(report: TrackerFitReport): boolean {
 }
 
 /**
+ * What this export actually lost, as a list something can be said about.
+ *
+ * Each entry names a *kind* of loss and how much of it there was. Which kinds
+ * exist, and the order a reader should meet them in, is a fact about the
+ * format rather than about a dialog — so it lives here beside the report it
+ * describes, and every app that shows one shows the same four in the same
+ * order. Entries with a count of zero are omitted: "0 notes were dropped" is
+ * noise in a list whose whole purpose is to say what went wrong.
+ *
+ * The strings are keys, not prose: the count has to pluralise in the reader's
+ * own language, which appending an "s" does not do.
+ */
+export const TRACKER_FIT_LOSSES = [
+  'clampedNotes',
+  'droppedVoices',
+  'droppedShortNotes',
+  'quantisedNotes',
+] as const satisfies readonly (keyof TrackerFitReport)[];
+
+export type TrackerFitLoss = (typeof TRACKER_FIT_LOSSES)[number];
+
+export function trackerFitLosses(
+  report: TrackerFitReport
+): { kind: TrackerFitLoss; count: number }[] {
+  return TRACKER_FIT_LOSSES.filter(kind => report[kind] > 0).map(kind => ({
+    kind,
+    count: report[kind],
+  }));
+}
+
+/**
  * Speed and tempo for a musical BPM.
  *
  * `effectiveBpm(speed, tempo) = 6 * tempo / speed`, so at speed 6 the tempo

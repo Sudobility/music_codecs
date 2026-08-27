@@ -3,7 +3,8 @@ import { createEmptyScore } from '@sudobility/music_types';
 import { createId } from '@sudobility/music_types';
 import { midiToPitch } from '@sudobility/music_types';
 import type { NoteEvent, Score } from '@sudobility/music_types';
-import { scoreToTracker } from './export.js';
+import { isCleanFit, scoreToTracker, trackerFitLosses } from './export.js';
+import type { TrackerFitReport } from './export.js';
 
 /** A score with one note per entry, placed on the first track's first measure. */
 function scoreWithNotes(
@@ -227,5 +228,44 @@ describe('speed and tempo', () => {
 
   it('lowers speed for a fast score so tempo stays a legal byte', () => {
     expect(speedTempoAt(400)).toEqual({ speed: 3, bpm: 200 });
+  });
+});
+
+describe('what a tracker export lost', () => {
+  const none: TrackerFitReport = {
+    clampedNotes: 0,
+    droppedVoices: 0,
+    droppedShortNotes: 0,
+    quantisedNotes: 0,
+  };
+
+  it('says nothing about a clean fit', () => {
+    // The case that must not cost the user a click.
+    expect(trackerFitLosses(none)).toEqual([]);
+    expect(isCleanFit(none)).toBe(true);
+  });
+
+  it('omits the kinds that did not happen', () => {
+    // "0 notes were dropped" is noise in a list of what went wrong.
+    expect(trackerFitLosses({ ...none, droppedVoices: 2 })).toEqual([
+      { kind: 'droppedVoices', count: 2 },
+    ]);
+  });
+
+  it('reports every kind in one fixed order', () => {
+    // The order is a fact about the format, so two apps showing this list
+    // show it the same way round.
+    const all = trackerFitLosses({
+      clampedNotes: 1,
+      droppedVoices: 2,
+      droppedShortNotes: 3,
+      quantisedNotes: 4,
+    });
+    expect(all.map(l => l.kind)).toEqual([
+      'clampedNotes',
+      'droppedVoices',
+      'droppedShortNotes',
+      'quantisedNotes',
+    ]);
   });
 });
