@@ -882,17 +882,3 @@ export function exportMusicXml(score: Score): string {
     `</score-partwise>\n`
   );
 }
-
-/**
- * Slugifies `title` into a filesystem/URL-safe download filename (no
- * extension). Identical behavior to `adapters/midi/export.ts`'s
- * `safeFilename` (kept as a local copy so this module has no cross-adapter
- * dependency); see that module for the rationale.
- */
-export function safeFilename(title: string): string {
-  const slug = title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-  return slug.length > 0 ? slug : 'untitled';
-}

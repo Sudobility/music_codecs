@@ -5,8 +5,8 @@
 > that turn**. Approval for an earlier change does not carry forward, and finishing a
 > task is not permission to commit it.
 
-Every score file format Moosiac reads or writes: MIDI, MusicXML and the tracker
-modules. One of six repos in the family — see `music_app/docs/architecture.md`.
+Every score file format Moosiac reads or writes: MIDI, MusicXML, the tracker
+modules and the app's own `.moo` project file. One of six repos in the family — see `music_app/docs/architecture.md`.
 
 **The rule: a format that carries notes lives here; a format that carries
 samples lives in `@sudobility/music_io`.** Reading a MIDI file or a tracker
@@ -50,6 +50,16 @@ rather than `.at(-1)` for exactly that reason.
   (`trackerToScore`), `export.ts` (`scoreToTracker`), `fill.ts`, `limits.ts`,
   `timing.ts`
 - `src/musicxml/` — `import.ts`, `export.ts`, `duration-map.ts`
+- `src/project/` — `project-file.ts`: the app's own `.moo` document
+  (`serializeProjectFile`/`parseProjectFile`, `DOCUMENT_EXTENSION(S)`). Writes
+  `{ version, title, score }`, reads that and the web's older
+  `{ name, schemaVersion, score }` export, and validates the score with
+  `parseScore`
+- `src/file-names.ts` — the one naming rule for every exported file
+  (`exportFilename`/`exportBasename`: keep the title, replace only the
+  characters a filesystem reserves, `Untitled` when blank; no ASCII slugging)
+  and `importedTitle`. `safeFilename`/`musicXmlSafeFilename` are index-level
+  aliases of `exportBasename`, kept only while music_app imports them
 - `src/fixtures.ts` — the test-facing entry (`./fixtures`), which publishes the
   module builders and nothing else
 - `src/test/` — `fixtures.ts` (score fixtures) and `xml.ts` (a jsdom

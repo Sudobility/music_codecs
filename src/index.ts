@@ -1,10 +1,10 @@
 /**
  * @sudobility/music_codecs — the score encoders and decoders.
  *
- * Every file format ScoreSmith reads or writes lives here: MIDI, MusicXML and
- * the tracker modules. Each one turns bytes-shaped input into a `Score`, or a
- * `Score` back out, and does nothing else — no store, no rendering, no audio,
- * no platform.
+ * Every file format ScoreSmith reads or writes lives here: MIDI, MusicXML,
+ * the tracker modules and the app's own `.moo` project file. Each one turns
+ * bytes-shaped input into a `Score`, or a `Score` back out, and does nothing
+ * else — no store, no rendering, no audio, no platform.
  *
  * That is why it is its own package. `music_api` (backend) and `music_lib`
  * (frontend) both need to read a MIDI file, and neither may depend on the
@@ -36,16 +36,24 @@ export * from './midi/measures.js';
 // ---- MusicXML -------------------------------------------------------------
 export * from './musicxml/duration-map.js';
 export * from './musicxml/import.js';
+export { exportMusicXml } from './musicxml/export.js';
+
+// ---- The app's own project file (.moo) ----------------------------------
+export * from './project/project-file.js';
+
+// ---- File names, for every format above ----------------------------------
+export * from './file-names.js';
 /**
- * `safeFilename` is exported by both writers and they are not the same
- * function — each sanitises for its own format's conventions. The MIDI one
- * keeps the bare name it always had; the MusicXML one is named for its format
- * rather than one of them silently shadowing the other.
+ * The two names each writer used to export for its own slug function. They
+ * are one rule now (`exportBasename`: keep the title, replace only reserved
+ * characters), and survive only because music_app still imports both through
+ * music_lib. Aliases, not implementations — delete them once no app imports
+ * them, rather than letting a second naming rule grow back behind one.
  */
 export {
-  exportMusicXml,
-  safeFilename as musicXmlSafeFilename,
-} from './musicxml/export.js';
+  exportBasename as safeFilename,
+  exportBasename as musicXmlSafeFilename,
+} from './file-names.js';
 
 // ---- Tracker modules (MOD, S3M, XM, IT, MPTM) -----------------------------
 /**

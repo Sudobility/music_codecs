@@ -1,6 +1,6 @@
 import { Midi } from '@tonejs/midi';
 import { describe, expect, it } from 'vitest';
-import { exportMidi, safeFilename } from './export.js';
+import { exportMidi } from './export.js';
 import { createEmptyScore } from '@sudobility/music_types';
 import { createId } from '@sudobility/music_types';
 import type { NoteEvent, Score } from '@sudobility/music_types';
@@ -206,20 +206,5 @@ describe('exportMidi', () => {
     // loses sub-1/127 precision (~0.0079) - tolerance reflects that, not exactness.
     expect(volumeEvents[0].value).toBeCloseTo(0.5, 2);
     expect(panEvents[0].value).toBeCloseTo(0, 5); // pan -1 -> normalized 0, exact
-  });
-});
-
-describe('safeFilename', () => {
-  it('lowercases and hyphenates', () => {
-    expect(safeFilename('My Song!')).toBe('my-song');
-  });
-
-  it('collapses punctuation runs into a single hyphen and trims edges', () => {
-    expect(safeFilename('Score #2 (draft)')).toBe('score-2-draft');
-  });
-
-  it('falls back to "untitled" for empty/punctuation-only input', () => {
-    expect(safeFilename('')).toBe('untitled');
-    expect(safeFilename('   ***   ')).toBe('untitled');
   });
 });

@@ -5,7 +5,7 @@
  * whitespace/attribute-order choices.
  */
 import { describe, expect, it } from 'vitest';
-import { escapeXml, exportMusicXml, safeFilename } from './export.js';
+import { escapeXml, exportMusicXml } from './export.js';
 import { createId } from '@sudobility/music_types';
 import type { Measure, NoteEvent, Score, Track } from '@sudobility/music_types';
 import { measureDurationTicks, ticksFor } from '@sudobility/music_types';
@@ -611,19 +611,6 @@ describe('exportMusicXml', () => {
     expect(textOf(doc.documentElement, 'work > work-title')).toBe(
       'Rock & Roll <Suite>'
     );
-  });
-});
-
-describe('safeFilename', () => {
-  it('slugifies a title into a lowercase-hyphenated filename', () => {
-    expect(safeFilename('Twinkle Twinkle Little Star')).toBe(
-      'twinkle-twinkle-little-star'
-    );
-  });
-
-  it('falls back to "untitled" for a title with no alphanumeric characters', () => {
-    expect(safeFilename('   ')).toBe('untitled');
-    expect(safeFilename('***')).toBe('untitled');
   });
 });
 

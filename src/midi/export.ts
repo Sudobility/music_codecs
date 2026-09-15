@@ -135,18 +135,3 @@ export function scoreToMidiFile(score: Score): MidiFile {
 export function exportMidi(score: Score): Uint8Array {
   return encodeMidi(scoreToMidiFile(score));
 }
-
-/**
- * Slugifies `title` into a filesystem/URL-safe download filename (no
- * extension): lowercase, `[a-z0-9]` runs joined by single hyphens, leading/
- * trailing hyphens trimmed. Falls back to `"untitled"` for a title with no
- * alphanumeric characters at all (empty, whitespace-only, or
- * punctuation-only).
- */
-export function safeFilename(title: string): string {
-  const slug = title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-  return slug.length > 0 ? slug : 'untitled';
-}
