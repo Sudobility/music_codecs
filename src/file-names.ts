@@ -18,11 +18,36 @@ import type { Score } from '@sudobility/music_types';
 const RESERVED = /[/\\:*?"<>|]/g;
 
 /**
- * The file name for `title`, without an extension: reserved characters become
- * `-`, surrounding whitespace is trimmed, and a blank title is `Untitled`.
+ * Control characters, which are less a reserved *character* than a way of not
+ * getting the name you asked for.
+ *
+ * A NUL truncates the name at the OS layer on every platform this ships to — a
+ * score titled `So<NUL>ng` was written as `So`, so what landed on disk was not
+ * what was asked for — and a tab or a newline in a file name is unprintable
+ * wherever it goes. Windows rejects the whole range outright, alongside the
+ * nine characters above.
+ *
+ * Removed rather than turned into `-`, and removed *first*: a title whose only
+ * offence is a leading newline should still trim away to the title, and it
+ * cannot once that newline has become a dash. `music_io`'s `safeFilename` —
+ * the last thing a name passes before a real write — strips the same set, for
+ * the same stated reason.
+ *
+ * `\p{Cc}` rather than a numeric range: it is the Unicode control category
+ * itself, so it says what it means and covers DEL and the C1 controls too.
+ */
+const CONTROL = /\p{Cc}/gu;
+
+/**
+ * The file name for `title`, without an extension: control characters are
+ * dropped, reserved characters become `-`, surrounding whitespace is trimmed,
+ * and a blank title is `Untitled`.
  */
 export function exportBasename(title: string | undefined): string {
-  return (title ?? '').replace(RESERVED, '-').trim() || 'Untitled';
+  return (
+    (title ?? '').replace(CONTROL, '').replace(RESERVED, '-').trim() ||
+    'Untitled'
+  );
 }
 
 /** `Wedding March` + `mid` -> `Wedding March.mid`. Blank is `Untitled`. */

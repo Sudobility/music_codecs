@@ -16,6 +16,27 @@ describe('exportFilename', () => {
     );
   });
 
+  it('drops control characters, which the OS would not write anyway', () => {
+    // A NUL truncates the name at the OS layer on every platform here, so what
+    // lands on disk is `So` rather than the name that was asked for.
+    const nul = String.fromCharCode(0);
+    expect(exportFilename(`So${nul}ng`, 'mid')).toBe('Song.mid');
+    const newline = String.fromCharCode(10);
+    const tab = String.fromCharCode(9);
+    expect(exportFilename(`Line1${newline}Line2`, 'mid')).toBe(
+      'Line1Line2.mid'
+    );
+    expect(exportFilename(`a${tab}b`, 'mid')).toBe('ab.mid');
+  });
+
+  it('still trims a title whose only offence surrounds it', () => {
+    // Dropped rather than replaced with `-`, and before the reserved pass: as
+    // a dash, a leading newline would leave `-Song` with nothing to trim.
+    const newline = String.fromCharCode(10);
+    expect(exportFilename(`${newline}Song${newline}`, 'mid')).toBe('Song.mid');
+    expect(exportBasename(String.fromCharCode(7))).toBe('Untitled');
+  });
+
   it('falls back to Untitled for a blank title', () => {
     expect(exportFilename('', 'wav')).toBe('Untitled.wav');
     expect(exportFilename('   ', 'wav')).toBe('Untitled.wav');
