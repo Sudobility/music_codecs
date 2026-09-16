@@ -6,7 +6,10 @@
 > task is not permission to commit it.
 
 Every score file format Moosiac reads or writes: MIDI, MusicXML, the tracker
-modules and the app's own `.moo` project file. One of six repos in the family — see `music_app/docs/architecture.md`.
+modules and the app's own `.moo` project file — the encoders and decoders, and
+the filenames written for those formats (`exportFilename`). The formats'
+option and result types are music_types'. One of the eight shared libraries in
+the family (beside `music_api` and the two apps) — see `music_app/docs/architecture.md`.
 
 **The rule: a format that carries notes lives here; a format that carries
 samples lives in `@sudobility/music_io`.** Reading a MIDI file or a tracker
@@ -33,8 +36,10 @@ be remembered:
    below — it is a test oracle, not an implementation.
 
 Target is **ES2020**, because the server consumes this package: no `.at()`, no
-`??=`, no `Object.hasOwn`. `replacement-region.ts` uses `measures[length - 1]`
-rather than `.at(-1)` for exactly that reason.
+`??=`, no `Object.hasOwn`. `importedTitle` in `file-names.ts` reads
+`segments[segments.length - 1]` rather than `.at(-1)` for exactly that reason
+(music_types, which the server also consumes, holds to the same target — its
+`replacement-region.ts` is the other place this shows).
 
 ## Structure
 
@@ -51,21 +56,28 @@ rather than `.at(-1)` for exactly that reason.
   `timing.ts`
 - `src/musicxml/` — `import.ts`, `export.ts`, `duration-map.ts`
 - `src/project/` — `project-file.ts`: the app's own `.moo` document
-  (`serializeProjectFile`/`parseProjectFile`, `DOCUMENT_EXTENSION(S)`). Writes
+  (`serializeProjectFile`/`parseProjectFile`, `ProjectFileError`). The file's
+  name, version and shape — `DOCUMENT_EXTENSION(S)`, `PROJECT_FILE_VERSION`,
+  `ProjectFile` — are music_types' and are not re-exported from here: other
+  packages read them without parsing anything, and music_editing had come to
+  depend on this codec just to name the file. Writes
   `{ version, title, score }`, reads that and the web's older
   `{ name, schemaVersion, score }` export, and validates the score with
   `parseScore`
 - `src/file-names.ts` — the one naming rule for every exported file
   (`exportFilename`/`exportBasename`: keep the title, replace only the
   characters a filesystem reserves, `Untitled` when blank; no ASCII slugging)
-  and `importedTitle`. `safeFilename`/`musicXmlSafeFilename` are index-level
-  aliases of `exportBasename`, kept only while music_app imports them
+  and `importedTitle`. The old `safeFilename`/`musicXmlSafeFilename` aliases
+  are gone, and `file-names.test.ts` fails if either name comes back
 - `src/fixtures.ts` — the test-facing entry (`./fixtures`), which publishes the
   module builders and nothing else
 - `src/test/` — `fixtures.ts` (score fixtures) and `xml.ts` (a jsdom
   `XmlParser`). Scaffolding: not shipped, excluded from the build
 
 ## Gotchas
+
+- **The codecs' option and result types are music_types'.** `MidiSummary` and its sub-types, `DetectedGrid`, `MidiImportOptions`/`MidiTrackSelection`/`MidiImportResult`, `TimeSignatureChange`/`MeasureSpan`, `MusicXmlImportResult`/`MusicXmlWarnings`, and the tracker export's `TrackerFitReport`, `TRACKER_FIT_LOSSES`, `TrackerExportOptions`/`Result`, `WritableTrackerFormat` and `TrackerLimits` are declared once there, so the apps, music_io's `ScoreFiles` and music_lib name one shape. The numbers and the functions stay here (`TRACKER_LIMITS`, `FALLBACK_GRID`, `trackerFitLosses`, `defaultMidiImportOptions`). `src/__moved-to-types.test.ts` fails if one is exported at runtime, declared or re-exported here again — music_lib re-exports this package and music_types wholesale, so the same name arriving by both routes is a TS2308 in its build and a "Cannot redefine property" crash in a CommonJS consumer. Because a type has no runtime form, `warning-contract.test.ts` now reads the declared warning keys off `TEST_MUSICXML_WARNINGS`, which is typed as the whole contract — a key added or removed in music_types fails to compile there.
+
 
 - **One fact, one declaration — and `src/__single-source.test.ts` enforces it.** A constant restated in a second package agrees with the first right up until one of them is edited, and nothing fails when they part: the build is clean, the types match, and the only symptom is a wrong sound or a picker quietly missing an entry. Measured across the family, 23 UPPER_CASE constants were declared in more than one repo — `CC_VOLUME` three times, `DYNAMICS` four, `C_MAJOR` five, and `DEFAULT_TIME_SIGNATURE` in four places under two names. The guard reads the list of names **from music_types at runtime** rather than restating it, because a check against duplication that duplicates what it checks would drift like everything else; its `ALLOWED` list is empty on purpose, so an exemption is a decision somebody writes down. Two shapes matter beyond the constants themselves. **A closed vocabulary is declared as an array and the type read off it** (`export const DYNAMICS = [...] as const; export type Dynamic = (typeof DYNAMICS)[number];`) — a TypeScript union has no runtime form, so anything that must *validate* a value has to write the list out again, which is exactly how music_api's decoder came to check generated music against its own private copy. **A label or option list keyed by the vocabulary is a `Record<T, ...>`, never a parallel array** — a record fails to compile when a member is added, an array silently goes on offering the old set; that is why the inspector's picker lists are `ACCIDENTAL_OPTIONS`/`ARTICULATION_OPTIONS` built from the vocabulary rather than `ACCIDENTALS`/`ARTICULATIONS` retyped. Test fixtures follow the same rule: the score fixtures live once, in `@sudobility/music_types/test`, and a package that needs a rendering fixture of its own re-exports them and adds to them.
 
@@ -106,6 +118,19 @@ rather than `.at(-1)` for exactly that reason.
   other direction. Before the codec moved into this package, a test that wanted
   the `MidiFile` had to inject a fake `MidiCodec` that captured its argument
   instead of encoding — borrowing a platform seam to observe a value.
+- **Tracker import works on a format-neutral model, and that is the whole
+  point.** `TrackerModule` (music_types, `formats/mod.ts`) carries MIDI note
+  numbers rather than Amiga periods, per-pattern row counts, an instrument
+  layer, an explicit `'off'` and normalised `speed`/`bpm` — so `trackerToScore`
+  (`src/mod/import.ts`) has no format branches, and each format this package
+  reads (MOD, DSM, S3M, XM, IT/MPTM) was decoder work in `src/tracker/` only.
+- **`src/mod/fill.ts` exists because a bar that does not add up renders short.**
+  `trackerToScore` used to place notes and nothing else, which left holes: a real
+  module produced 554 `measure-underfull` warnings and visibly short bars
+  (`mod/import.test.ts` now asserts none). `fillVoiceWithRests` tiles every voice
+  exactly across its measure, with music_types' `decomposeDuration` splitting a
+  gap too long for one drawable value. Any importer that builds voices by hand
+  needs the same treatment.
 - **The individual tracker readers are not exported.** Which one runs is decided
   by magic bytes in `decodeTracker`, never by file extension, so a mis-named
   module still imports and an unrecognised file fails naming what was actually
@@ -122,7 +147,7 @@ rather than `.at(-1)` for exactly that reason.
 - **In XM almost nothing has a fixed size, and the instrument header is the one that catches people.** The file header, every pattern header and every instrument header declare their own length. An instrument with *no samples* writes 33 bytes where one with samples writes 263, and real modules mix them freely — `sunlight.xm` has eight empty among fifteen — so assuming 263 desynchronises everything after the first. Finding the next instrument needs all three of the header size, the sample-header size and the sum of every sample's length. Patterns come *before* instruments, so the instruments can only be found by walking every pattern first.
 - **XM patterns carry their own row count, and `packedSize = 0` means blank rows rather than none.** `dr_wily.xm` holds a 76-row pattern among its 64s and four empty patterns; `mercury.xm` holds 32s and 56s. XM is the first format here that is not fixed at 64, which makes it the first real test of that axis of `TrackerModule` — and it needed no change. Emitting nothing for an empty pattern would shorten the song and shift everything after it.
 - **XM reuses `applyProTrackerEffect`,** unlike S3M. Verified across four real modules: effect `F` carried parameters 1-24 and 125, splitting at `0x20` exactly as MOD does, and `D` is a pattern break. **Not verified:** XM's per-sample relative-note and finetune are ignored, so a module using them imports transposed — the same class of limitation as MOD's finetune.
-- **`periodToMidi` lives here, beside the MOD reader, and that is deliberate.** It is a musical conversion, which would normally put it in music_lib — but MOD is the only tracker format that stores Amiga periods; every other one stores note numbers directly. Converting at the decoder is what lets the neutral `TrackerCell` carry a plain note number and keeps "periods are a ProTracker detail" true. Its finetune approximation is documented in that file.
+- **`periodToMidi` lives here, beside the MOD reader, and that is deliberate.** It is a musical conversion, which would normally put it beside `trackerToScore` in `src/mod/` — but MOD is the only tracker format that stores Amiga periods; every other one stores note numbers directly. Converting at the decoder is what lets the neutral `TrackerCell` carry a plain note number and keeps "periods are a ProTracker detail" true. Its finetune approximation is documented in that file.
 
 ## Related Projects
 

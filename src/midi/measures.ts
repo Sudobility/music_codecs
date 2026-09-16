@@ -11,24 +11,13 @@ import { splitNoteAcrossMeasures } from '@sudobility/music_types';
 import type {
   KeySignature,
   Measure,
+  MeasureSpan,
+  TimeSignatureChange,
   MusicalEvent,
   NoteEvent,
-  TimeSignature,
 } from '@sudobility/music_types';
 import { measureDurationTicks } from '@sudobility/music_types';
 import { DEFAULT_TIME_SIGNATURE } from '@sudobility/music_types';
-
-export type TimeSignatureChange = {
-  tick: number;
-  timeSignature: TimeSignature;
-};
-
-export type MeasureSpan = {
-  index: number;
-  startTick: number;
-  durationTicks: number;
-  timeSignature: TimeSignature;
-};
 
 /**
  * Computes consecutive measure spans covering `[0, endTick)` from a set of

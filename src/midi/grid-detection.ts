@@ -16,13 +16,7 @@
  * timing the listener expects, and snapping it is an editing choice, not a
  * safe default.
  */
-import type { DurationName } from '@sudobility/music_types';
-
-export type DetectedGrid = {
-  grid: DurationName | null;
-  /** Triplet subdivision of `grid` — 2/3 of it, matching `quantize`'s `tripletGrid`. */
-  triplet: boolean;
-};
+import type { DetectedGrid, DurationName } from '@sudobility/music_types';
 
 /**
  * Candidates coarsest first, so the first fit wins: a file of straight eighths

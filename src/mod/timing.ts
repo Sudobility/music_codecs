@@ -10,7 +10,7 @@
  * music_io: every other tracker format stores note numbers directly, so the
  * decoder is the only thing that ever sees a period.
  */
-import type { TrackerCell } from './types.js';
+import type { TrackerCell } from '@sudobility/music_types';
 import { MAX_BPM, MIN_BPM } from '@sudobility/music_types';
 
 /**

@@ -12,12 +12,13 @@
  */
 import type {
   MidiFile,
+  MidiImportOptions,
+  MidiImportResult,
   MidiTrackData as SourceMidiTrack,
+  TimeSignatureChange,
 } from '@sudobility/music_types';
 import { detectKeySignature } from './key-detection.js';
 import { assembleTrackMeasures, buildMeasureSpans } from './measures.js';
-import type { TimeSignatureChange } from './measures.js';
-import type { MidiImportOptions } from './import-options.js';
 import { midiToPitch, pitchToMidi } from '@sudobility/music_types';
 import { createId } from '@sudobility/music_types';
 import type {
@@ -494,8 +495,6 @@ function buildSplitTracks(
 }
 
 // ---- Entry point ------------------------------------------------------------
-
-export type MidiImportResult = { score: Score; warnings: string[] };
 
 /**
  * Imports a Standard MIDI File as a `Score` (spec §15): converts note times

@@ -4,7 +4,7 @@ import { createId } from '@sudobility/music_types';
 import { midiToPitch } from '@sudobility/music_types';
 import type { NoteEvent, Score } from '@sudobility/music_types';
 import { isCleanFit, scoreToTracker, trackerFitLosses } from './export.js';
-import type { TrackerFitReport } from './export.js';
+import type { TrackerFitReport } from '@sudobility/music_types';
 
 /** A score with one note per entry, placed on the first track's first measure. */
 function scoreWithNotes(

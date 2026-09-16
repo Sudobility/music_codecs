@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { createEmptyScore } from '@sudobility/music_types';
 import {
-  DOCUMENT_EXTENSION,
-  DOCUMENT_EXTENSIONS,
   PROJECT_FILE_VERSION,
+  createEmptyScore,
+} from '@sudobility/music_types';
+import * as codecs from '../index.js';
+import {
   ProjectFileError,
   parseProjectFile,
   serializeProjectFile,
@@ -20,10 +21,11 @@ function reasonOf(text: string): string | null {
   }
 }
 
-describe('project file extensions', () => {
-  it("writes .moo and opens the older .moosiac and the web's .json", () => {
-    expect(DOCUMENT_EXTENSION).toBe('moo');
-    expect(DOCUMENT_EXTENSIONS).toEqual(['moo', 'moosiac', 'json']);
+describe('project file vocabulary', () => {
+  it("is music_types' and is not exported from here, so it has one route to music_lib", () => {
+    expect('DOCUMENT_EXTENSION' in codecs).toBe(false);
+    expect('DOCUMENT_EXTENSIONS' in codecs).toBe(false);
+    expect('PROJECT_FILE_VERSION' in codecs).toBe(false);
   });
 });
 

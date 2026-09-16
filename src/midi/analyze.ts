@@ -3,46 +3,14 @@
  * per-track name/channel/program/note-count/duration, tempo events, and
  * time signatures, without importing anything into the score model yet.
  */
-import type { MidiFile, MidiTrackData } from '@sudobility/music_types';
-import { detectGrid, type DetectedGrid } from './grid-detection.js';
+import type {
+  MidiFile,
+  MidiSummary,
+  MidiTrackData,
+  MidiTrackSummary,
+} from '@sudobility/music_types';
+import { detectGrid } from './grid-detection.js';
 import { decodeMidi } from './decode.js';
-
-export type MidiTrackSummary = {
-  index: number;
-  name: string;
-  channel: number;
-  program: number;
-  instrumentName: string;
-  noteCount: number;
-  durationSeconds: number;
-  /** True when the track's channel is 9 (GM channel 10), the standard percussion channel. */
-  isPercussion: boolean;
-  /** Mean MIDI note number of the track's notes, or `null` if it has none — used to default a target clef. */
-  averageMidi: number | null;
-};
-
-export type MidiTempoEventSummary = { tick: number; bpm: number };
-
-export type MidiTimeSignatureSummary = {
-  tick: number;
-  numerator: number;
-  denominator: number;
-};
-
-export type MidiSummary = {
-  ppq: number;
-  durationSeconds: number;
-  tracks: MidiTrackSummary[];
-  tempoEvents: MidiTempoEventSummary[];
-  timeSignatures: MidiTimeSignatureSummary[];
-  /**
-   * The grid the file's onsets already sit on, which the wizard opens
-   * pre-filled with. Detected rather than assumed so that importing a file
-   * written in triplets or swing does not snap it onto a straight grid — see
-   * `grid-detection.ts`.
-   */
-  detectedGrid: DetectedGrid;
-};
 
 function summarizeTrack(track: MidiTrackData, index: number): MidiTrackSummary {
   const noteCount = track.notes.length;

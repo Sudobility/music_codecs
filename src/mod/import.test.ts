@@ -4,7 +4,7 @@ import { isNoteEvent } from '@sudobility/music_types';
 import { pitchToMidi } from '@sudobility/music_types';
 import { validateScore } from '@sudobility/music_types';
 import { allNotes } from '@sudobility/music_types';
-import type { TrackerCell, TrackerModule } from './types.js';
+import type { TrackerCell, TrackerModule } from '@sudobility/music_types';
 import type { Score } from '@sudobility/music_types';
 
 type CellSpec = {

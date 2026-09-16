@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { effectiveBpm, tempoChanges } from './timing.js';
-import type { TrackerCell } from './types.js';
+import type { TrackerCell } from '@sudobility/music_types';
 
 describe('effectiveBpm', () => {
   it('is 125 at the defaults', () => {

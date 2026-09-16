@@ -63,9 +63,13 @@ describe('importedTitle', () => {
 });
 
 describe('the old slug names', () => {
-  it('are aliases of the one rule, not a second implementation', async () => {
-    const index = await import('./index.js');
-    expect(index.safeFilename).toBe(exportBasename);
-    expect(index.musicXmlSafeFilename).toBe(exportBasename);
+  it('are gone, so a second naming rule has nowhere to grow back', async () => {
+    // `safeFilename` and `musicXmlSafeFilename` were each writer's own slug
+    // function, then aliases of `exportBasename` kept while music_app still
+    // imported them. Nothing does now; a name that survives with no caller is
+    // the first thing somebody reimplements "to match the old behaviour".
+    const index: Record<string, unknown> = await import('./index.js');
+    expect(index).not.toHaveProperty('safeFilename');
+    expect(index).not.toHaveProperty('musicXmlSafeFilename');
   });
 });

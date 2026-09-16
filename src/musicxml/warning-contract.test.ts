@@ -20,6 +20,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { TEST_MUSICXML_WARNINGS } from '../test/musicxml-warnings.js';
 
 // Resolved from the working directory rather than `import.meta.url`, which is
 // not a `file:` URL under this vitest transform.
@@ -28,21 +29,16 @@ const source = readFileSync(
   'utf8'
 );
 
-/** The keys declared on the `MusicXmlWarnings` type. */
+/**
+ * The keys declared on the `MusicXmlWarnings` type.
+ *
+ * The type lives in music_types now, and a type has no runtime form to walk —
+ * so the keys are read off the test catalogue, which is typed as the whole
+ * contract. A key added to the type and missing here fails to compile; one
+ * removed from the type and left here fails too, as an excess property.
+ */
 function declaredKeys(): string[] {
-  const start = source.indexOf('export type MusicXmlWarnings = {');
-  expect(start).toBeGreaterThan(-1);
-  const end = source.indexOf('\n};', start);
-  expect(end).toBeGreaterThan(start);
-
-  const body = source.slice(start, end);
-  const keys: string[] = [];
-  for (const line of body.split('\n')) {
-    // `name: string;` or `name: (args) => string;`, ignoring doc comments.
-    const match = /^\s{2}([a-zA-Z][a-zA-Z0-9]*)\s*:/.exec(line);
-    if (match) keys.push(match[1]);
-  }
-  return keys;
+  return Object.keys(TEST_MUSICXML_WARNINGS);
 }
 
 describe('the MusicXmlWarnings contract', () => {

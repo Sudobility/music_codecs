@@ -24,7 +24,7 @@ const WEB_ONLY =
 
 function sources(): string[] {
   return globSync('src/**/*.ts', { cwd: process.cwd() }).filter(
-    (f) => !f.includes('.test.') && !f.startsWith('src/test/'),
+    f => !f.includes('.test.') && !f.startsWith('src/test/')
   );
 }
 
@@ -40,7 +40,7 @@ function codeOf(file: string): string {
 
 describe('portability to React Native', () => {
   it('touches no global that React Native does not have', () => {
-    const offenders = sources().flatMap((file) => {
+    const offenders = sources().flatMap(file => {
       const match = WEB_ONLY.exec(codeOf(file));
       return match ? [`${file}: ${match[1]}`] : [];
     });

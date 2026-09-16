@@ -43,17 +43,6 @@ export * from './project/project-file.js';
 
 // ---- File names, for every format above ----------------------------------
 export * from './file-names.js';
-/**
- * The two names each writer used to export for its own slug function. They
- * are one rule now (`exportBasename`: keep the title, replace only reserved
- * characters), and survive only because music_app still imports both through
- * music_lib. Aliases, not implementations — delete them once no app imports
- * them, rather than letting a second naming rule grow back behind one.
- */
-export {
-  exportBasename as safeFilename,
-  exportBasename as musicXmlSafeFilename,
-} from './file-names.js';
 
 // ---- Tracker modules (MOD, S3M, XM, IT, MPTM) -----------------------------
 /**
@@ -67,4 +56,5 @@ export * from './mod/fill.js';
 export * from './mod/import.js';
 export * from './mod/limits.js';
 export * from './mod/timing.js';
-export * from './mod/types.js';
+// The module shape (`TrackerModule`, `TrackerCell`, …) is music_types', and is
+// not re-exported from here: music_lib re-exports both packages wholesale.

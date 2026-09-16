@@ -5,35 +5,12 @@
  * derives sensible starting values from an `analyzeMidi` summary so the
  * wizard can open pre-filled.
  */
-import type { MidiSummary, MidiTrackSummary } from './analyze.js';
-import type { Clef, DurationName } from '@sudobility/music_types';
-
-export type MidiTrackSelection = {
-  sourceIndex: number;
-  include: boolean;
-  clef: Clef;
-  name: string;
-};
-
-export type MidiImportOptions = {
-  trackSelections: MidiTrackSelection[];
-  /** Quantization grid value (spec §15's "whole" .. "sixteenth triplet" list); `null` skips start/duration quantization entirely. */
-  quantizeGrid: DurationName | null;
-  /** Use a triplet subdivision of `quantizeGrid` when quantizing. */
-  tripletDetection: boolean;
-  /** Notes shorter than this (at 480 ppq) are dropped as accidental/ornamental noise; `1` preserves every representable note. */
-  minDurationTicks: number;
-  /** Cluster near-simultaneous onsets within a small tolerance onto a shared start tick. */
-  mergeNearDuplicates: boolean;
-  /** `"extend"` lengthens notes to the sustain-pedal release point; `"ignore"` uses raw note-off timing. */
-  sustainPedal: 'extend' | 'ignore';
-  /** Split a single MIDI track into two linked grand-staff tracks ("Piano RH"/"Piano LH") instead of one track on `defaultClefFor`'s guessed clef. */
-  pianoStaffSplit: boolean;
-  /** MIDI note number at/above which a note is placed on the upper (RH/treble) staff when `pianoStaffSplit` is set. */
-  splitPointMidi: number;
-  /** Estimate a key signature from the included tracks' notes (Krumhansl-style) instead of defaulting to C major. */
-  detectKey: boolean;
-};
+import type {
+  Clef,
+  MidiImportOptions,
+  MidiSummary,
+  MidiTrackSummary,
+} from '@sudobility/music_types';
 
 /** Middle C — the conventional grand-staff RH/LH split point. */
 const DEFAULT_SPLIT_POINT_MIDI = 60;

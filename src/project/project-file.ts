@@ -21,33 +21,22 @@
  * Failures carry a `reason` so an app can word them; the English `message` is
  * for logs.
  */
-import type { Score } from '@sudobility/music_types';
-import { parseScore } from '@sudobility/music_types';
+import type {
+  ProjectFile,
+  ProjectFileErrorReason,
+  Score,
+} from '@sudobility/music_types';
+import { PROJECT_FILE_VERSION, parseScore } from '@sudobility/music_types';
 
-/** The format version this build writes and the newest it reads. */
-export const PROJECT_FILE_VERSION = 1;
-
-/** What the apps write. */
-export const DOCUMENT_EXTENSION = 'moo';
-
-/**
- * What the apps open: their own extension, the longer one documents were
- * saved under before it was shortened, and the web's `.json` project export.
- */
-export const DOCUMENT_EXTENSIONS = [
-  DOCUMENT_EXTENSION,
-  'moosiac',
-  'json',
-] as const;
-
-export type ProjectFile = {
-  version: number;
-  title: string;
-  score: Score;
-};
-
-export type ProjectFileErrorReason =
-  'invalidJson' | 'notAProject' | 'newerVersion' | 'invalidScore';
+/*
+  The file's name, version and shape — `DOCUMENT_EXTENSION(S)`,
+  `PROJECT_FILE_VERSION`, `ProjectFile`, `ProjectFileErrorReason` — are
+  music_types', not this module's: they are vocabulary other packages read
+  without parsing anything, and a package for editing had come to depend on
+  this codec just to name the file. Not re-exported from here either: music_lib
+  re-exports both packages wholesale, and one name reaching it by two routes is
+  a build error.
+*/
 
 export class ProjectFileError extends Error {
   readonly reason: ProjectFileErrorReason;

@@ -20,7 +20,7 @@ import { createId } from '@sudobility/music_types';
 import { midiToPitch } from '@sudobility/music_types';
 import { effectiveBpm, tempoChanges } from './timing.js';
 import { fillVoiceWithRests } from './fill.js';
-import type { TrackerCell, TrackerModule } from './types.js';
+import type { TrackerCell, TrackerModule } from '@sudobility/music_types';
 import type {
   NoteEvent,
   Score,

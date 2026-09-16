@@ -15,6 +15,14 @@ export { buildIt } from './tracker/it-fixture.js';
 export { buildS3m } from './tracker/s3m-fixture.js';
 export { buildXm } from './tracker/xm-fixture.js';
 export type { DsmCellSpec, DsmOptions } from './tracker/dsm-fixture.js';
-export type { ItCellSpec, ItPatternSpec, ItOptions } from './tracker/it-fixture.js';
+export type {
+  ItCellSpec,
+  ItPatternSpec,
+  ItOptions,
+} from './tracker/it-fixture.js';
 export type { S3mCellSpec, S3mOptions } from './tracker/s3m-fixture.js';
-export type { XmCellSpec, XmPatternSpec, XmOptions } from './tracker/xm-fixture.js';
+export type {
+  XmCellSpec,
+  XmPatternSpec,
+  XmOptions,
+} from './tracker/xm-fixture.js';

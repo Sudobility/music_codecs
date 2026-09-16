@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { defaultMidiImportOptions } from './import-options.js';
-import type { MidiSummary, MidiTrackSummary } from './analyze.js';
+import type { MidiSummary, MidiTrackSummary } from '@sudobility/music_types';
 
 function track(overrides: Partial<MidiTrackSummary>): MidiTrackSummary {
   return {

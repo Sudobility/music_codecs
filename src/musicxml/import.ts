@@ -18,7 +18,12 @@
 import { createId } from '@sudobility/music_types';
 import { beamGroups, isNoteEvent } from '@sudobility/music_types';
 import { DYNAMICS } from '@sudobility/music_types';
-import type { XmlElement, XmlParser } from '@sudobility/music_types';
+import type {
+  MusicXmlImportResult,
+  MusicXmlWarnings,
+  XmlElement,
+  XmlParser,
+} from '@sudobility/music_types';
 import type {
   Accidental,
   BarlineStyle,
@@ -93,39 +98,6 @@ function numberOf(el: XmlElement | null, tagName: string): number | null {
 }
 
 // ---- Warnings -----------------------------------------------------------------
-
-/**
- * Every warning this importer can raise, in the caller's words.
- *
- * Functions where the warning names something it found — a clef, a tag, a
- * tempo — so the host can put the value where its own grammar wants it rather
- * than having English word order baked in here.
- */
-export type MusicXmlWarnings = {
-  unsupportedClef: (sign: string, line: number) => string;
-  unsupportedKeyMode: (mode: string) => string;
-  unsupportedTime: (measureNumber: number) => string;
-  complexTimeSignature: string;
-  unsupportedPitchStep: (step: string) => string;
-  alterRounded: (alter: string, clamped: number) => string;
-  unsupportedNotation: (tag: string) => string;
-  unsupportedNoteElement: (tag: string) => string;
-  unsupportedArticulation: (tag: string) => string;
-  multipleArticulations: string;
-  unpitched: string;
-  noPitchOrRest: string;
-  noDuration: string;
-  nonPositiveDuration: string;
-  noteTrimmed: string;
-  unsupportedMeasureElement: (tag: string) => string;
-  noTempo: (defaultBpm: number) => string;
-  tempoClamped: (
-    bpm: number,
-    min: number,
-    max: number,
-    clamped: number
-  ) => string;
-};
 
 /** Collects warnings, deduplicated by exact message text (so a repeated unsupported element only appears once). */
 class WarningCollector {
@@ -1442,8 +1414,6 @@ function buildTempoMap(
 }
 
 // ---- Entry point ------------------------------------------------------------------
-
-export type MusicXmlImportResult = { score: Score; warnings: string[] };
 
 /**
  * Imports a MusicXML (score-partwise) document string as a `Score` (spec

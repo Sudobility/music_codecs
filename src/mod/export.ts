@@ -18,12 +18,16 @@
 import type {
   Score,
   TrackerCell,
-  TrackerModule,
+  TrackerExportOptions,
+  TrackerExportResult,
+  TrackerFitLoss,
+  TrackerFitReport,
 } from '@sudobility/music_types';
+import { TRACKER_FIT_LOSSES } from '@sudobility/music_types';
 import { isNoteEvent } from '@sudobility/music_types';
 import { pitchToMidi } from '@sudobility/music_types';
 import { DEFAULT_BPM } from '@sudobility/music_types';
-import { TRACKER_LIMITS, type WritableTrackerFormat } from './limits.js';
+import { TRACKER_LIMITS } from './limits.js';
 
 const DEFAULT_ROWS_PER_BEAT = 4;
 const ROWS_PER_PATTERN = 64;
@@ -33,28 +37,6 @@ const MIN_TEMPO = 32;
 const MAX_TEMPO = 255;
 /** Tried in order; the first that puts tempo in range wins. */
 const SPEED_CHOICES = [6, 12, 3] as const;
-
-export type TrackerExportOptions = {
-  format: WritableTrackerFormat;
-  /** Rows per quarter note. 4 gives sixteenths and cannot express triplets. */
-  rowsPerBeat?: number;
-};
-
-export type TrackerFitReport = {
-  /** Notes moved into range. */
-  clampedNotes: number;
-  /** Voices that did not fit the format's channel count. */
-  droppedVoices: number;
-  /** Notes shorter than one row, lost to the grid. */
-  droppedShortNotes: number;
-  /** Notes whose start moved to land on a row. */
-  quantisedNotes: number;
-};
-
-export type TrackerExportResult = {
-  module: TrackerModule;
-  report: TrackerFitReport;
-};
 
 /** True when nothing was lost — the case that must not cost the user a click. */
 export function isCleanFit(report: TrackerFitReport): boolean {
@@ -67,27 +49,11 @@ export function isCleanFit(report: TrackerFitReport): boolean {
 }
 
 /**
- * What this export actually lost, as a list something can be said about.
- *
- * Each entry names a *kind* of loss and how much of it there was. Which kinds
- * exist, and the order a reader should meet them in, is a fact about the
- * format rather than about a dialog — so it lives here beside the report it
- * describes, and every app that shows one shows the same four in the same
- * order. Entries with a count of zero are omitted: "0 notes were dropped" is
- * noise in a list whose whole purpose is to say what went wrong.
- *
- * The strings are keys, not prose: the count has to pluralise in the reader's
- * own language, which appending an "s" does not do.
+ * What this export actually lost, as a list something can be said about:
+ * each kind of loss in `TRACKER_FIT_LOSSES` order, omitting the ones with a
+ * count of zero — "0 notes were dropped" is noise in a list whose whole purpose
+ * is to say what went wrong.
  */
-export const TRACKER_FIT_LOSSES = [
-  'clampedNotes',
-  'droppedVoices',
-  'droppedShortNotes',
-  'quantisedNotes',
-] as const satisfies readonly (keyof TrackerFitReport)[];
-
-export type TrackerFitLoss = (typeof TRACKER_FIT_LOSSES)[number];
-
 export function trackerFitLosses(
   report: TrackerFitReport
 ): { kind: TrackerFitLoss; count: number }[] {

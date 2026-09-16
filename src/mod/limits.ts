@@ -11,18 +11,11 @@
  * DSM and MPTM are absent deliberately: nothing reads DSM that does not read a
  * better format, and OpenMPT reads IT natively, so writing either buys nothing.
  */
-import type { TrackerFormat } from '@sudobility/music_types';
-
-/** The formats export can write. A subset of `TrackerFormat`, which import also covers. */
-export type WritableTrackerFormat = 'mod' | 's3m' | 'xm' | 'it';
-
-export type TrackerLimits = {
-  channels: number;
-  instruments: number;
-  /** Inclusive MIDI note range this format can express. */
-  lowestMidi: number;
-  highestMidi: number;
-};
+import type {
+  TrackerFormat,
+  TrackerLimits,
+  WritableTrackerFormat,
+} from '@sudobility/music_types';
 
 export const TRACKER_LIMITS: Record<WritableTrackerFormat, TrackerLimits> = {
   // Three octaves, anchored on period.ts's C-1 = MIDI 36.
