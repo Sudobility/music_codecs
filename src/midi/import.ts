@@ -19,6 +19,8 @@ import type {
 } from '@sudobility/music_types';
 import { detectKeySignature } from './key-detection.js';
 import { assembleTrackMeasures, buildMeasureSpans } from './measures.js';
+import { detectAnacrusisTicks } from './downbeat.js';
+import { DEFAULT_TIME_SIGNATURE } from '@sudobility/music_types';
 import { midiToPitch, pitchToMidi } from '@sudobility/music_types';
 import { createId } from '@sudobility/music_types';
 import type {
@@ -518,7 +520,15 @@ function buildSplitTracks(
  */
 export function importMidiFile(
   midi: MidiFile,
-  options: MidiImportOptions
+  options: MidiImportOptions,
+  /**
+   * Extra behaviour the wizard's `MidiImportOptions` does not carry.
+   * `detectPickup` aligns the first barline to the first strong beat — see
+   * `detectAnacrusisTicks`. Off by default, so an ordinary import is unchanged;
+   * the transcription path turns it on, since a recording rarely begins exactly
+   * on a downbeat.
+   */
+  extra: { detectPickup?: boolean } = {}
 ): MidiImportResult {
   const warnings: string[] = [ALWAYS_WARNING];
   const ratio = SCORE_PPQ / midi.header.ppq;
@@ -590,7 +600,24 @@ export function importMidiFile(
     );
     return Math.max(max, localMax);
   }, 0);
-  const spans = buildMeasureSpans(timeSignatureChanges, SCORE_PPQ, endTick);
+  const firstTimeSignature =
+    timeSignatureChanges.find(c => c.tick === 0)?.timeSignature ??
+    timeSignatureChanges[0]?.timeSignature ??
+    DEFAULT_TIME_SIGNATURE;
+  const pickupTicks = extra.detectPickup
+    ? detectAnacrusisTicks(
+        allNotes.map(n => n.startTick),
+        SCORE_PPQ,
+        firstTimeSignature,
+        allNotes.map(n => n.velocity)
+      )
+    : 0;
+  const spans = buildMeasureSpans(
+    timeSignatureChanges,
+    SCORE_PPQ,
+    endTick,
+    pickupTicks
+  );
 
   const tracks: Track[] = respelledSelections.flatMap(prepared =>
     options.pianoStaffSplit

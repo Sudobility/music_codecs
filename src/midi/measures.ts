@@ -32,11 +32,18 @@ import { DEFAULT_TIME_SIGNATURE } from '@sudobility/music_types';
  * absorbed into whichever measure is in progress when it's reached, rather
  * than truncating a partial measure — a documented simplification, not a
  * full mid-measure meter change.
+ *
+ * `pickupTicks`, when positive and shorter than the first full measure, makes
+ * the first span a pickup bar of that length so the following barlines fall on
+ * real downbeats (see `detectAnacrusisTicks`). It is only passed for
+ * transcription, where there are no meter changes to collide with; an ordinary
+ * import passes 0 and is unchanged.
  */
 export function buildMeasureSpans(
   changes: TimeSignatureChange[],
   ppq: number,
-  endTick: number
+  endTick: number,
+  pickupTicks = 0
 ): MeasureSpan[] {
   const sorted = [...changes].sort((a, b) => a.tick - b.tick);
   const withOrigin =
@@ -47,6 +54,24 @@ export function buildMeasureSpans(
   const spans: MeasureSpan[] = [];
   let cursor = 0;
   let index = 0;
+
+  // A pickup bar: a short first measure in the opening meter, so every full bar
+  // after it begins on a downbeat. Guarded to be shorter than a full bar — a
+  // "pickup" as long as the bar is just the bar.
+  const firstMeasureTicks = measureDurationTicks(
+    withOrigin[0].timeSignature,
+    ppq
+  );
+  if (pickupTicks > 0 && pickupTicks < firstMeasureTicks) {
+    spans.push({
+      index: 0,
+      startTick: 0,
+      durationTicks: pickupTicks,
+      timeSignature: withOrigin[0].timeSignature,
+    });
+    cursor = pickupTicks;
+    index = 1;
+  }
 
   for (let i = 0; i < withOrigin.length; i += 1) {
     const timeSignature = withOrigin[i].timeSignature;

@@ -50,6 +50,31 @@ describe('buildMeasureSpans', () => {
     ).toBe(true);
   });
 
+  it('makes a short first bar when a pickup is given', () => {
+    // 960-tick pickup in 4/4: a half-bar first measure, then full bars.
+    const spans = buildMeasureSpans([], PPQ, 960 + 1920 * 2, 960);
+    expect(spans[0]).toEqual({
+      index: 0,
+      startTick: 0,
+      durationTicks: 960,
+      timeSignature: DEFAULT_TIME_SIGNATURE,
+    });
+    expect(spans[1].startTick).toBe(960);
+    expect(spans[1].durationTicks).toBe(1920);
+    expect(spans[2].startTick).toBe(960 + 1920);
+  });
+
+  it('ignores a pickup that is a whole bar or longer', () => {
+    const spans = buildMeasureSpans([], PPQ, 3840, 1920);
+    expect(spans[0].startTick).toBe(0);
+    expect(spans[0].durationTicks).toBe(1920);
+  });
+
+  it('treats a zero pickup as no pickup', () => {
+    const spans = buildMeasureSpans([], PPQ, 1920, 0);
+    expect(spans[0].durationTicks).toBe(1920);
+  });
+
   it('switches meter at a time signature change tick', () => {
     const changes = [
       { tick: 0, timeSignature: { numerator: 4, denominator: 4 } },
