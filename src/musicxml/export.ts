@@ -188,6 +188,12 @@ type NoteSegmentOptions = {
   tieStop: boolean;
   tieStart: boolean;
   voiceNumber: number;
+  /**
+   * The syllable on this note is held across the following note(s) — a melisma.
+   * Draws an `<extend/>` so a reader (and another notation app) sees the word
+   * sustained rather than ending here.
+   */
+  lyricExtend?: boolean;
 };
 
 /** One `<note>` element for a pitched note segment (one of possibly several tied segments notating a single `NoteEvent`). */
@@ -298,11 +304,18 @@ function buildPitchedNoteXml(
     segments would otherwise repeat the word at every join — and never on a
     chord's non-root member, where it would print the syllable once per
     notehead.
+
+    An `<extend/>` is added when the syllable is held across the notes that
+    follow (a melisma). Our own model carries a melisma as a held note with no
+    lyric, so this is not needed to re-import here; it is what lets another
+    notation app draw the extension line instead of showing bare wordless notes.
   */
   const lyricXml =
     note.lyric && !opts.isChord && opts.tieStop === false
       ? `<lyric><syllabic>${note.lyric.syllabic ?? 'single'}</syllabic>` +
-        `<text>${escapeXml(note.lyric.text)}</text></lyric>`
+        `<text>${escapeXml(note.lyric.text)}</text>` +
+        (opts.lyricExtend ? '<extend/>' : '') +
+        `</lyric>`
       : '';
   /*
     A tuplet says two things in MusicXML: `<time-modification>` on every note
@@ -457,8 +470,42 @@ function buildVoiceEventsXml(
     }
   }
 
-  for (const group of groupByStartTick(voice.events)) {
+  const moments = [...groupByStartTick(voice.events)];
+  /*
+    The last moment that carries a word. Wordless notes after it are not a
+    melisma — they are simply unlyriced (a lyric that stops before the music
+    does, which is ordinary) — so no extension is drawn past this point. Our
+    model marks a held syllable only by the *absence* of a lyric on the notes
+    after it, which it cannot tell apart from an unlyriced tail; requiring a
+    later word is the conservative reading. The cost is that a melisma on the
+    very last word of a part is exported without its line.
+  */
+  let lastLyricMoment = -1;
+  for (let i = moments.length - 1; i >= 0; i -= 1) {
+    const r = moments[i][0];
+    if (isNoteEvent(r) && r.lyric) {
+      lastLyricMoment = i;
+      break;
+    }
+  }
+  for (let momentIndex = 0; momentIndex < moments.length; momentIndex += 1) {
+    const group = moments[momentIndex];
     const root = group[0];
+    /*
+      The word on this moment is held across the next if that next moment is a
+      pitched note carrying no lyric of its own — a melisma — and a later word
+      still follows, so this is an interior hold rather than the unlyriced tail.
+      A rest after the syllable ends it (a breath), not a hold, so a rest moment
+      does not count.
+    */
+    const nextRoot = moments[momentIndex + 1]?.[0];
+    const melismaAhead =
+      isNoteEvent(root) &&
+      !!root.lyric &&
+      momentIndex < lastLyricMoment &&
+      !!nextRoot &&
+      isNoteEvent(nextRoot) &&
+      !nextRoot.lyric;
     if (!isNoteEvent(root)) {
       for (const segment of notateDuration(root.durationTicks, ppq)) {
         xml += buildRestNoteXml(segment, voiceNumber);
@@ -605,6 +652,11 @@ function buildVoiceEventsXml(
           // decomposed one would otherwise restart its group at every join.
           ...(segmentIndex === 0 && beamByEventId.has(note.id)
             ? { beam: beamByEventId.get(note.id) }
+            : {}),
+          // The melisma extension belongs to the syllable, so only the root of
+          // the moment and only its first segment.
+          ...(groupIndex === 0 && segmentIndex === 0 && melismaAhead
+            ? { lyricExtend: true }
             : {}),
         });
       });

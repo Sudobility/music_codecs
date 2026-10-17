@@ -605,6 +605,42 @@ describe('lyrics round-trip', () => {
         .every(n => !n.lyric)
     ).toBe(true);
   });
+
+  /**
+   * "oh" on the first note, held across the second (a melisma), then "bright"
+   * on the third. The hold is interior — a later word follows — which is what
+   * tells the exporter it is a melisma rather than the unlyriced tail.
+   */
+  function melisma(): Score {
+    const score = twinkleScore();
+    const notes = allNotes(score).filter(isNoteEvent);
+    let result = setLyricCommand(notes[0].id, { text: 'oh' }, 'Lyric').execute(
+      score
+    );
+    result = setLyricCommand(notes[2].id, { text: 'bright' }, 'Lyric').execute(
+      result
+    );
+    return result;
+  }
+
+  it('round-trips a melisma: the held note stays wordless', () => {
+    const { imported, warnings } = roundTrip(melisma());
+    const notes = allNotes(imported).filter(isNoteEvent);
+    expect(warnings).toEqual([]);
+    expect(notes[0].lyric).toEqual({ text: 'oh' });
+    expect(notes[1].lyric).toBeUndefined();
+    expect(notes[2].lyric).toEqual({ text: 'bright' });
+  });
+
+  it('writes one <extend/> on the held syllable, and none when a lyric just ends', () => {
+    const held = exportMusicXml(melisma());
+    expect((held.match(/<extend\/>/g) ?? []).length).toBe(1);
+
+    // `sung()` lyrics the first three notes and leaves the rest of the tune
+    // wordless: an unlyriced tail, not a melisma, so no extension is drawn.
+    const allSung = exportMusicXml(sung());
+    expect(allSung).not.toContain('<extend/>');
+  });
 });
 
 describe('tuplets round-trip', () => {
