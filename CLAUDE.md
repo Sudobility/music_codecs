@@ -17,8 +17,9 @@ real audio context, so it is a platform capability (music_io).
 
 ## Commands
 
-- `bun run verify` — format:check + typecheck + lint + test + build (before any push).
-- `bun run test` — vitest. `bun run build` — `tsc -p tsconfig.esm.json`.
+- `bun run verify` — format:check + typecheck + lint + test:unit + build (before any push).
+- `bun run test:unit` — vitest (one-shot); `bun run test:watch` — watch mode. There is no
+  bare `test` script. `bun run build` — `tsc -p tsconfig.esm.json`. `bun run lint` — eslint.
 
 ## Package boundaries
 

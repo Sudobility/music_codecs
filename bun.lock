@@ -6,8 +6,8 @@
       "name": "@sudobility/music_codecs",
       "devDependencies": {
         "@eslint/js": "~9.39.5",
-        "@sudobility/music_types": "^0.13.65",
-        "@sudobility/types": "^1.9.78",
+        "@sudobility/music_types": "^0.13.66",
+        "@sudobility/types": "^1.9.79",
         "@tonejs/midi": "~2.0.28",
         "@types/jsdom": "~30.0.0",
         "@typescript-eslint/eslint-plugin": "~8.72.0",
@@ -23,7 +23,7 @@
         "vitest": "~4.1.12",
       },
       "peerDependencies": {
-        "@sudobility/music_types": "^0.13.65",
+        "@sudobility/music_types": "^0.13.66",
       },
     },
   },
@@ -110,9 +110,9 @@
 
     "@standard-schema/spec": ["@standard-schema/spec@1.1.0", "", {}, "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w=="],
 
-    "@sudobility/music_types": ["@sudobility/music_types@0.13.65", "https://npm.pkg.github.com/download/@sudobility/music_types/0.13.65/59a1f86d1e34796c839bc056c811e769e7075643", { "peerDependencies": { "@sudobility/types": "^1.9.78", "immer": "^10.0.0 || ^11.0.0", "zod": "^4.0.0" } }, "sha512-sx8w9O9N4t9epLibdraLJShjog6z3fV7nQ2BQREK8Z5GJrHv3GkayqCzFcZLEEKyzK0V42K4fKNLcXv+A0VhVA=="],
+    "@sudobility/music_types": ["@sudobility/music_types@0.13.66", "https://npm.pkg.github.com/download/@sudobility/music_types/0.13.66/58c4d135800c3430aedd391672bf717c716b2937", { "peerDependencies": { "@sudobility/types": "^1.9.79", "immer": "^10.0.0 || ^11.0.0", "zod": "^4.0.0" } }, "sha512-UvEpdeG5YBTbTnJQbe54z/BKNx/VNoKhtjUB7YBTPTnoDzNLQAPaqJest62TcCxqsr4I4paTJyvnOw1Rom48Zg=="],
 
-    "@sudobility/types": ["@sudobility/types@1.9.78", "https://npm.pkg.github.com/download/@sudobility/types/1.9.78/19ca0df5ad7d490bafc1b84384a8002f5dbc29ea", {}, "sha512-W6DYMUf7D0cVVUHDv5T8YZ339Wyay6xPx0CsdfNVgHDsm1ISDLhwacUwlM9xnvwXHGuAhP77wRVVo3uKGZe46Q=="],
+    "@sudobility/types": ["@sudobility/types@1.9.79", "https://npm.pkg.github.com/download/@sudobility/types/1.9.79/59975e39d6ab7e215418a489ef3cfe214b7521f4", {}, "sha512-rRtDT++fVy+I1m6E31fq752lxCQytFzwfqpJe5wDMPLcC1rJOBa7v+4+5e3cmX8VV1CsuLg8PTLMFe6A7AELRQ=="],
 
     "@tonejs/midi": ["@tonejs/midi@2.0.28", "", { "dependencies": { "array-flatten": "^3.0.0", "midi-file": "^1.2.2" } }, "sha512-RII6YpInPsOZ5t3Si/20QKpNqB1lZ2OCFJSOzJxz38YdY/3zqDr3uaml4JuCWkdixuPqP1/TBnXzhQ39csyoVg=="],
 
